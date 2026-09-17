@@ -74,6 +74,9 @@ interface Notification extends NotificationConfig {
 const VOICE_ISOLATION_SPEAKER_NUDGE_ID = "voice-isolation-speaker-turn-off";
 const DEFAULT_UFD_DISMISS_MS = 4000;
 const VOICE_NOISE_NUDGE_DISMISS_MS = 10000;
+// Promote-landscape rotate-hint icon (brainstorming/screensharing idea 1).
+const ROTATE_HINT_SHOW_DELAY_MS = 5000;
+const ROTATE_HINT_VISIBLE_MS = 4000;
 
 export function MeetingPage() {
   const navigate = useNavigate();
@@ -158,6 +161,18 @@ export function MeetingPage() {
 
   // Liquid Mode-style easy-read (reflow) view — opt-in, portrait-native (brainstorming/screensharing idea 2)
   const [isLiquidReflowOpen, setIsLiquidReflowOpen] = useState(false);
+  // Which slide is showing, shared between the stage strip and easy-read so switching
+  // modes stays on the same slide instead of resetting to the first one.
+  const [stageSlideIndex, setStageSlideIndex] = useState(0);
+
+  // Promote-landscape rotate-hint icon (brainstorming/screensharing idea 1) — small animated
+  // icon next to the easy-read button, shown once per share (5s in, or 2 zoom attempts).
+  const [showRotateHint, setShowRotateHint] = useState(false);
+  const zoomAttemptCountRef = useRef(0);
+  const rotateHintFiredRef = useRef(false);
+  const rotateHintShowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rotateHintHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevIsContentSharingForNudgeRef = useRef(isContentSharing);
 
   // Current view state (0: on-the-go, 1: gallery, 2: focus)
   const [currentView, setCurrentView] = useState(1);
@@ -679,6 +694,50 @@ export function MeetingPage() {
     }
     advanceNotification();
   }, [advanceNotification]);
+
+  // Promote-landscape hint (brainstorming/screensharing idea 1): a small animated rotate
+  // icon (Reels-style — rotates 90deg and back) next to the easy-read button, shown once per
+  // share either 5s after sharing starts or as soon as the user double-taps/zooms twice.
+  const triggerRotateHint = useCallback(() => {
+    if (rotateHintFiredRef.current) return;
+    rotateHintFiredRef.current = true;
+    if (rotateHintShowTimerRef.current) clearTimeout(rotateHintShowTimerRef.current);
+    setShowRotateHint(true);
+    if (rotateHintHideTimerRef.current) clearTimeout(rotateHintHideTimerRef.current);
+    rotateHintHideTimerRef.current = setTimeout(() => setShowRotateHint(false), ROTATE_HINT_VISIBLE_MS);
+  }, []);
+
+  useEffect(() => {
+    if (isContentSharing && !prevIsContentSharingForNudgeRef.current) {
+      zoomAttemptCountRef.current = 0;
+      rotateHintFiredRef.current = false;
+      setShowRotateHint(false);
+      if (rotateHintShowTimerRef.current) clearTimeout(rotateHintShowTimerRef.current);
+      rotateHintShowTimerRef.current = setTimeout(() => triggerRotateHint(), ROTATE_HINT_SHOW_DELAY_MS);
+    }
+    if (!isContentSharing) {
+      if (rotateHintShowTimerRef.current) clearTimeout(rotateHintShowTimerRef.current);
+      if (rotateHintHideTimerRef.current) clearTimeout(rotateHintHideTimerRef.current);
+      zoomAttemptCountRef.current = 0;
+      rotateHintFiredRef.current = false;
+      setShowRotateHint(false);
+    }
+    prevIsContentSharingForNudgeRef.current = isContentSharing;
+  }, [isContentSharing, triggerRotateHint]);
+
+  // Clear pending timers on unmount.
+  useEffect(() => {
+    return () => {
+      if (rotateHintShowTimerRef.current) clearTimeout(rotateHintShowTimerRef.current);
+      if (rotateHintHideTimerRef.current) clearTimeout(rotateHintHideTimerRef.current);
+    };
+  }, []);
+
+  // Zoom/pinch signal on the shared content — 2 attempts shows the rotate hint immediately.
+  const handleContentZoomAttempt = useCallback(() => {
+    zoomAttemptCountRef.current += 1;
+    if (zoomAttemptCountRef.current >= 2) triggerRotateHint();
+  }, [triggerRotateHint]);
 
   const snoozeNoisePrompt = useCallback(() => {
     noisePromptSnoozeUntilRef.current = Date.now() + 2 * 60 * 1000;
@@ -1225,6 +1284,10 @@ export function MeetingPage() {
                   isContentSharing={isContentSharing}
                   onEnterFullscreen={handleEnterFullscreen}
                   onOpenReflow={handleOpenReflow}
+                  onZoomAttempt={handleContentZoomAttempt}
+                  showRotateHint={showRotateHint}
+                  activeSlideIndex={stageSlideIndex}
+                  onActiveSlideIndexChange={setStageSlideIndex}
                   activeEmoji={activeEmoji}
                 />
               </div>
@@ -1254,6 +1317,10 @@ export function MeetingPage() {
               isContentSharing={isContentSharing}
               onEnterFullscreen={handleEnterFullscreen}
               onOpenReflow={handleOpenReflow}
+              onZoomAttempt={handleContentZoomAttempt}
+              showRotateHint={showRotateHint}
+              activeSlideIndex={stageSlideIndex}
+              onActiveSlideIndexChange={setStageSlideIndex}
               activeEmoji={activeEmoji}
             />
           )}
@@ -1508,7 +1575,12 @@ export function MeetingPage() {
 
       {/* Easy read — Liquid Mode-style reflow overlay, opt-in (brainstorming/screensharing idea 2) */}
       {isLiquidReflowOpen && (
-        <LiquidReflowContentView onExit={handleCloseReflow} sharerName="Aadi Kapoor" />
+        <LiquidReflowContentView
+          onExit={handleCloseReflow}
+          sharerName="Aadi Kapoor"
+          initialSlideIndex={stageSlideIndex}
+          onSlideIndexChange={setStageSlideIndex}
+        />
       )}
 
       {/* Keyframes for notification animation */}

@@ -11,12 +11,17 @@
  * below to reflow the same content.
  */
 
+import { useEffect, useRef } from "react";
 import slideImg1 from "@/assets/figma/shared-content/Screenshot 2026-09-16 235806.png";
 import slideImg2 from "@/assets/figma/shared-content/Screenshot 2026-09-16 235824.png";
 import slideImg3 from "@/assets/figma/shared-content/Screenshot 2026-09-16 235843.png";
 import slideImg4 from "@/assets/figma/shared-content/Screenshot 2026-09-16 235855.png";
 import slideImg5 from "@/assets/figma/shared-content/Screenshot 2026-09-16 235907.png";
 import slideImg6 from "@/assets/figma/shared-content/Screenshot 2026-09-16 235919.png";
+// Cropped to just the trend-line graphs — the one part of these two slides that's a genuine
+// image, not text, and so can't be reflowed (everything else is already captured as data above).
+import slide3TableGraphic from "@/assets/figma/shared-content/slide3-table-graphic.png";
+import slide4ChartGraphic from "@/assets/figma/shared-content/slide4-chart-graphic.png";
 
 export interface ChartData {
   title: string;
@@ -41,8 +46,8 @@ export interface CardItem {
 
 export type Slide =
   | { kind: "bullets"; title: string; subtitle: string; image: string; bullets: string[] }
-  | { kind: "chart"; title: string; subtitle: string; image: string; chart: ChartData; insight?: string }
-  | { kind: "table"; title: string; subtitle: string; image: string; table: TableData }
+  | { kind: "chart"; title: string; subtitle: string; image: string; chart: ChartData; insight?: string; graphicImage: string }
+  | { kind: "table"; title: string; subtitle: string; image: string; table: TableData; graphicImage: string }
   | { kind: "code"; title: string; subtitle: string; image: string; code: string[]; caption: string }
   | { kind: "ladder"; title: string; subtitle: string; image: string; items: LadderItem[] }
   | { kind: "cards"; title: string; subtitle: string; image: string; cards: CardItem[] };
@@ -82,6 +87,7 @@ export const DEMO_SLIDES: Slide[] = [
     title: "PMP Adoption",
     subtitle: "Managed tenants and devices (excluding Teams windows devices and SIP) in PMP compared to TAC.",
     image: slideImg3,
+    graphicImage: slide3TableGraphic,
     table: {
       headers: ["Metric", "Value", "Note"],
       rows: [
@@ -101,6 +107,7 @@ export const DEMO_SLIDES: Slide[] = [
     title: "Device type migration progress",
     subtitle: "Combined across NOAM \u00b7 EMEA \u00b7 APAC",
     image: slideImg4,
+    graphicImage: slide4ChartGraphic,
     chart: {
       title: "PMP Connected of TAC online",
       bars: [
@@ -142,13 +149,15 @@ export const DEMO_SLIDES: Slide[] = [
 
 /** One slide preview \u2014 the actual slide screenshot, shown at its exact
  *  aspect ratio (letterboxed, never cropped) within the shared-content frame.
- *  This is the real deck as it would look on a screen share. */
-export function OriginalSlideCard({ slide }: { slide: Slide }) {
+ *  This is the real deck as it would look on a screen share. A double-tap/
+ *  double-click stands in for a pinch-zoom gesture (feeds idea 1's struggle signal). */
+export function OriginalSlideCard({ slide, onZoomAttempt }: { slide: Slide; onZoomAttempt?: () => void }) {
   return (
     <div className="w-full h-full flex items-center justify-center bg-fy27-surface-card">
       <img
         src={slide.image}
         alt={slide.title}
+        onDoubleClick={onZoomAttempt}
         className="max-w-full max-h-full object-contain"
       />
     </div>
@@ -157,13 +166,61 @@ export function OriginalSlideCard({ slide }: { slide: Slide }) {
 
 /** The meeting stage's shared-content frame, showing the full 6-slide deck in
  *  its original (unreflowed) form as a horizontally scrollable, snap-paged
- *  strip \u2014 one slide fills the frame at a time, swipe to browse the rest. */
-export function OriginalSlideDeckStrip() {
+ *  strip \u2014 one slide fills the frame at a time, swipe to browse the rest.
+ *
+ *  `activeIndex`/`onActiveIndexChange` keep this in sync with the easy-read
+ *  view (idea 2 feedback: switching modes should stay on the same slide, not
+ *  reset to the first one) \u2014 scrolls to `activeIndex` when it changes
+ *  externally, and reports the user's own swipes back up via scroll position. */
+export function OriginalSlideDeckStrip({
+  onZoomAttempt,
+  activeIndex = 0,
+  onActiveIndexChange,
+}: {
+  onZoomAttempt?: () => void;
+  activeIndex?: number;
+  onActiveIndexChange?: (index: number) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const lastScrolledToRef = useRef(activeIndex);
+
+  // Scroll to the active slide when it changes from outside this strip
+  // (e.g. returning from easy-read on a different slide than we left on).
+  useEffect(() => {
+    if (activeIndex === lastScrolledToRef.current) return;
+    lastScrolledToRef.current = activeIndex;
+    slideRefs.current[activeIndex]?.scrollIntoView({ behavior: "auto", inline: "center", block: "nearest" });
+  }, [activeIndex]);
+
+  // Report the user's own swipes back up so easy-read opens on the right slide.
+  const handleScroll = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onScroll = () => {
+    if (handleScroll.current) clearTimeout(handleScroll.current);
+    handleScroll.current = setTimeout(() => {
+      const el = containerRef.current;
+      if (!el || !onActiveIndexChange) return;
+      const index = Math.round(el.scrollLeft / el.clientWidth);
+      const clamped = Math.max(0, Math.min(DEMO_SLIDES.length - 1, index));
+      lastScrolledToRef.current = clamped;
+      onActiveIndexChange(clamped);
+    }, 120);
+  };
+
   return (
-    <div className="w-full h-full overflow-x-auto snap-x snap-mandatory flex" style={{ scrollbarWidth: "none" }}>
-      {DEMO_SLIDES.map((slide) => (
-        <div key={slide.title} className="w-full h-full shrink-0 snap-center">
-          <OriginalSlideCard slide={slide} />
+    <div
+      ref={containerRef}
+      onScroll={onScroll}
+      className="w-full h-full overflow-x-auto snap-x snap-mandatory flex"
+      style={{ scrollbarWidth: "none" }}
+    >
+      {DEMO_SLIDES.map((slide, i) => (
+        <div
+          key={slide.title}
+          ref={(el) => { slideRefs.current[i] = el; }}
+          className="w-full h-full shrink-0 snap-center"
+        >
+          <OriginalSlideCard slide={slide} onZoomAttempt={onZoomAttempt} />
         </div>
       ))}
     </div>

@@ -18,6 +18,10 @@ interface MeetingViewsProps {
   isContentSharing?: boolean;
   onEnterFullscreen?: () => void;
   onOpenReflow?: () => void;
+  onZoomAttempt?: () => void;
+  showRotateHint?: boolean;
+  activeSlideIndex?: number;
+  onActiveSlideIndexChange?: (index: number) => void;
   // ignored (kept so it drops into the SwipeableViews slot)
   isMicOn?: boolean;
   isVideoOn?: boolean;
@@ -33,6 +37,10 @@ export function MeetingViewsGallery({
   isContentSharing = false,
   onEnterFullscreen,
   onOpenReflow,
+  onZoomAttempt,
+  showRotateHint,
+  activeSlideIndex,
+  onActiveSlideIndexChange,
 }: MeetingViewsProps) {
   return (
     <div className="h-full w-full relative overflow-hidden bg-fy27-surface">
@@ -42,6 +50,10 @@ export function MeetingViewsGallery({
         isContentSharing={isContentSharing}
         onEnterFullscreen={onEnterFullscreen}
         onOpenReflow={onOpenReflow}
+        onZoomAttempt={onZoomAttempt}
+        showRotateHint={showRotateHint}
+        activeSlideIndex={activeSlideIndex}
+        onActiveSlideIndexChange={onActiveSlideIndexChange}
       />
     </div>
   );

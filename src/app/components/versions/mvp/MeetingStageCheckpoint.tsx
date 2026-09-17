@@ -32,6 +32,10 @@ interface MeetingStageCheckpointProps {
   isContentSharing?: boolean;
   onEnterFullscreen?: () => void;
   onOpenReflow?: () => void;
+  onZoomAttempt?: () => void;
+  showRotateHint?: boolean;
+  activeSlideIndex?: number;
+  onActiveSlideIndexChange?: (index: number) => void;
   isMicOn?: boolean;
   isVideoOn?: boolean;
   isHandRaised?: boolean;
@@ -55,6 +59,10 @@ export function MeetingStageCheckpoint({
   isContentSharing = false,
   onEnterFullscreen,
   onOpenReflow,
+  onZoomAttempt,
+  showRotateHint,
+  activeSlideIndex,
+  onActiveSlideIndexChange,
   isMicOn = true,
   isVideoOn = true,
   isHandRaised = false,
@@ -137,7 +145,16 @@ export function MeetingStageCheckpoint({
     return (
       <div className="bg-fy27-surface flex flex-col h-full">
         <div className="flex-1 min-h-0 overflow-hidden">
-          <SharedContentShare sharerName={SHARER} onMaximize={onEnterFullscreen} onReflow={onOpenReflow} splitLayout />
+          <SharedContentShare
+            sharerName={SHARER}
+            onMaximize={onEnterFullscreen}
+            onReflow={onOpenReflow}
+            onZoomAttempt={onZoomAttempt}
+            showRotateHint={showRotateHint}
+            activeSlideIndex={activeSlideIndex}
+            onActiveSlideIndexChange={onActiveSlideIndexChange}
+            splitLayout
+          />
         </div>
         {trayFor(allAsc)}
         {optionsSheet}

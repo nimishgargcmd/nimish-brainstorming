@@ -14,6 +14,10 @@ interface MeetingViewsProps {
   isContentSharing?: boolean;
   onEnterFullscreen?: () => void;
   onOpenReflow?: () => void;
+  onZoomAttempt?: () => void;
+  showRotateHint?: boolean;
+  activeSlideIndex?: number;
+  onActiveSlideIndexChange?: (index: number) => void;
   isMicOn?: boolean;
   isVideoOn?: boolean;
   onMicToggle?: () => void;
@@ -29,6 +33,10 @@ export function MeetingViewsCheckpoint({
   isContentSharing = false,
   onEnterFullscreen,
   onOpenReflow,
+  onZoomAttempt,
+  showRotateHint,
+  activeSlideIndex,
+  onActiveSlideIndexChange,
   isMicOn,
   isVideoOn,
   isHandRaised,
@@ -42,6 +50,10 @@ export function MeetingViewsCheckpoint({
         isContentSharing={isContentSharing}
         onEnterFullscreen={onEnterFullscreen}
         onOpenReflow={onOpenReflow}
+        onZoomAttempt={onZoomAttempt}
+        showRotateHint={showRotateHint}
+        activeSlideIndex={activeSlideIndex}
+        onActiveSlideIndexChange={onActiveSlideIndexChange}
         isMicOn={isMicOn}
         isVideoOn={isVideoOn}
         isHandRaised={isHandRaised}

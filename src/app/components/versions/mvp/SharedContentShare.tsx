@@ -1,5 +1,5 @@
 import { SlideshowControlBar } from "@/app/components/versions/mvp/SlideshowControlBar";
-import { OriginalSlideDeckStrip } from "@/app/components/DemoSlideDeck";
+import { OriginalSlideDeckStrip, DEMO_SLIDES } from "@/app/components/DemoSlideDeck";
 
 /**
  * Presenter slideshow share — Figma `996:37625` (Mobile Meeting Redesign).
@@ -9,10 +9,11 @@ import { OriginalSlideDeckStrip } from "@/app/components/DemoSlideDeck";
  * The shared-slide area shows the 6-slide demo deck in its original
  * (unreflowed) form via `OriginalSlideDeckStrip` — a horizontally scrollable,
  * snap-paged strip, one slide filling the frame at a time (brainstorming/
- * screensharing idea 2 — see notes.md). Buttons (prev/next, To presenter,
- * Take control) are demo no-ops; the bottom-right maximize button opens the
- * fullscreen content view via `onMaximize`. The "Aa" button opens the opt-in
- * Liquid Mode-style easy-read/reflow prototype via `onReflow`.
+ * screensharing idea 2 — see notes.md). The control bar's counter and prev/next
+ * reflect and drive that same deck; "To presenter"/"Take control" stay demo
+ * no-ops. The bottom-right maximize button opens the fullscreen content view
+ * via `onMaximize`. The "Aa" button opens the opt-in Liquid Mode-style
+ * easy-read/reflow prototype via `onReflow`.
  */
 
 /** Full-screen maximize (corner brackets) — Figma asset 996:37815 inner Shape. */
@@ -39,8 +40,52 @@ function EasyReadIcon() {
   );
 }
 
-export function SharedContentShare({ sharerName, onMaximize, onReflow, splitLayout = false }: { sharerName: string; onMaximize?: () => void; onReflow?: () => void; splitLayout?: boolean }) {
-  const controlBar = <SlideshowControlBar fullWidth />;
+/** Reels-style rotate hint (brainstorming/screensharing idea 1) — a small phone glyph that
+ *  rotates 90° and back on a loop, nudging toward landscape without any text/banner. */
+function RotateHintIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 16 16"
+      fill="none"
+      className="text-fy27-icon-interactive animate-rotate-hint"
+      style={{ transformOrigin: "50% 50%" }}
+    >
+      <rect x="4.25" y="1.5" width="7.5" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+      <circle cx="8" cy="11.9" r="0.75" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function SharedContentShare({
+  sharerName,
+  onMaximize,
+  onReflow,
+  onZoomAttempt,
+  showRotateHint = false,
+  splitLayout = false,
+  activeSlideIndex,
+  onActiveSlideIndexChange,
+}: {
+  sharerName: string;
+  onMaximize?: () => void;
+  onReflow?: () => void;
+  onZoomAttempt?: () => void;
+  showRotateHint?: boolean;
+  splitLayout?: boolean;
+  activeSlideIndex?: number;
+  onActiveSlideIndexChange?: (index: number) => void;
+}) {
+  const controlBar = (
+    <SlideshowControlBar
+      fullWidth
+      current={(activeSlideIndex ?? 0) + 1}
+      total={DEMO_SLIDES.length}
+      onPrev={() => onActiveSlideIndexChange?.(Math.max(0, (activeSlideIndex ?? 0) - 1))}
+      onNext={() => onActiveSlideIndexChange?.(Math.min(DEMO_SLIDES.length - 1, (activeSlideIndex ?? 0) + 1))}
+    />
+  );
 
   // Name-tag / fullscreen row.
   const nametagRow = (
@@ -49,6 +94,15 @@ export function SharedContentShare({ sharerName, onMaximize, onReflow, splitLayo
         <span className="px-[2px] truncate text-fy27-text-primary text-[12px] leading-[16px]">{sharerName}&apos;s content</span>
       </div>
       <div className="flex-1" />
+      {showRotateHint && (
+        <div
+          role="img"
+          aria-label="Tip: rotate your phone for a bigger view"
+          className="size-[52px] rounded-[8px] flex items-center justify-center shrink-0"
+        >
+          <RotateHintIcon />
+        </div>
+      )}
       <button
         type="button"
         aria-label="Open easy read"
@@ -76,7 +130,7 @@ export function SharedContentShare({ sharerName, onMaximize, onReflow, splitLayo
     return (
       <div className="w-full h-full flex flex-col overflow-hidden" style={{ fontFamily: "var(--font-sf-pro)" }}>
         <div className="flex-1 min-h-0 overflow-hidden">
-          <OriginalSlideDeckStrip />
+          <OriginalSlideDeckStrip onZoomAttempt={onZoomAttempt} activeIndex={activeSlideIndex} onActiveIndexChange={onActiveSlideIndexChange} />
         </div>
         {nametagRow}
         {controlBar}
@@ -89,7 +143,7 @@ export function SharedContentShare({ sharerName, onMaximize, onReflow, splitLayo
     <div className="w-full overflow-hidden rounded-[4px] bg-fy27-surface mb-[2px]" style={{ fontFamily: "var(--font-sf-pro)" }}>
       {/* Shared slide deck — original form, scrollable */}
       <div className="w-full h-[224px]">
-        <OriginalSlideDeckStrip />
+        <OriginalSlideDeckStrip onZoomAttempt={onZoomAttempt} activeIndex={activeSlideIndex} onActiveIndexChange={onActiveSlideIndexChange} />
       </div>
 
       {nametagRow}
