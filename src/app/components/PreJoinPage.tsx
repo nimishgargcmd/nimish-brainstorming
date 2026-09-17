@@ -14,6 +14,7 @@ import { BackgroundEffectsIcon } from "@/app/components/moreMenuIcons";
 import { IconCheck, IconChevronRight, IconDismiss } from "@/app/components/profile/fluentIcons";
 import { useVersion } from "@/app/versioning/VersionContext";
 import { isMvpFamily } from "@/app/versioning/versions";
+import { useFaceFraming } from "@/app/components/useFaceFraming";
 
 // Pre-join self-view backup image
 import imgSelf from "@/assets/figma/account/udayan.jpg";
@@ -109,15 +110,30 @@ export function PreJoinPage() {
   const speakerBtnRef = useRef<HTMLButtonElement>(null);
   const [menuPos, setMenuPos] = useState<{ bottom: number; right: number } | null>(null);
 
-  // Video auto-enhance demo (brainstorming/video bucket 1): simulate poor conditions,
-  // then show the AI auto-correcting them when Auto-enhance is on.
+  // Video auto-enhance demo (brainstorming/video bucket 1): lighting/quality are simulated
+  // (manual toggles), while framing is REAL — detected live off the camera feed and
+  // corrected automatically, no toggle needed.
   const [simulateLighting, setSimulateLighting] = useState(false);
-  const [simulateFraming, setSimulateFraming] = useState(false);
   const [simulateQuality, setSimulateQuality] = useState(false);
   const [autoEnhanceOn, setAutoEnhanceOn] = useState(true);
+  const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
 
   // Shared camera context — single stream for the whole app
   const { stream: cameraStream, cameraError, acquireCamera, setTrackEnabled, attachVideo, flipCamera } = useCamera();
+
+  // Real-time face detection drives the framing correction (only meaningful once a live stream exists).
+  const hasLiveStream = isVideoOn && !!cameraStream && !cameraError;
+  const faceFraming = useFaceFraming(videoEl, hasLiveStream && autoEnhanceOn);
+
+  // <video ref> needs to both receive the shared camera stream (attachVideo) and be readable
+  // here for face detection — combine both into one ref callback.
+  const attachVideoAndTrack = useCallback(
+    (el: HTMLVideoElement | null) => {
+      attachVideo(el);
+      setVideoEl(el);
+    },
+    [attachVideo]
+  );
 
   // Acquire camera on mount (idempotent — no-op if already active)
   useEffect(() => {
@@ -221,11 +237,10 @@ export function PreJoinPage() {
   const tileIconColor = "var(--fy27-icon-global)";
   const tileTextClass = "text-fy27-text-global";
 
-  // Auto-enhance demo: build the raw (uncorrected) vs. enhanced filter/transform for the self feed.
-  // When a condition is simulated and auto-enhance is on, the degradation is visually corrected;
-  // when auto-enhance is off, the raw degraded look is shown.
-  const anyConditionSimulated = simulateLighting || simulateFraming || simulateQuality;
-  const isAutoEnhancing = autoEnhanceOn && anyConditionSimulated;
+  // Auto-enhance demo: build the raw (uncorrected) vs. enhanced filter for the self feed.
+  // Lighting/quality are simulated; framing correction is real (see useFaceFraming above).
+  const anyConditionSimulated = simulateLighting || simulateQuality;
+  const isAutoEnhancing = (autoEnhanceOn && anyConditionSimulated) || faceFraming.isCorrecting;
   const videoFilterParts: string[] = [];
   if (simulateLighting) {
     videoFilterParts.push(autoEnhanceOn ? "brightness(1.05) contrast(1.05)" : "brightness(0.45) contrast(0.85)");
@@ -234,11 +249,10 @@ export function PreJoinPage() {
     videoFilterParts.push(autoEnhanceOn ? "contrast(1.08) saturate(1.05)" : "blur(2.5px) saturate(0.6) contrast(0.9)");
   }
   const selfVideoFilter = videoFilterParts.length ? videoFilterParts.join(" ") : undefined;
-  // Poor framing (raw): show the whole, uncropped feed shrunk down and pushed to one side,
-  // as if the user framed themselves too small/off-center. Auto-enhance zooms + recenters.
-  const isRawPoorFraming = simulateFraming && !autoEnhanceOn;
-  const selfVideoTransform = isRawPoorFraming ? "scaleX(-1) scale(0.52) translate(38%, 10%)" : "scaleX(-1)";
-  const selfVideoObjectFit: "cover" | "contain" = isRawPoorFraming ? "contain" : "cover";
+  // Real auto-framing: while auto-enhance is on and a face is detected off-center/wrongly sized,
+  // apply the computed corrective zoom + recenter; otherwise just mirror (show real framing as-is).
+  const selfVideoTransform = autoEnhanceOn && faceFraming.correctiveTransform ? faceFraming.correctiveTransform : "scaleX(-1)";
+  const selfVideoObjectFit: "cover" | "contain" = "cover";
 
   const topBarContent = (
     <div className="flex items-start justify-between px-[16px] w-full">
@@ -423,7 +437,6 @@ export function PreJoinPage() {
           <div className="flex items-center justify-center gap-[6px] shrink-0 w-full px-[16px] flex-wrap">
             {([
               { label: "Poor lighting", active: simulateLighting, onToggle: () => setSimulateLighting(v => !v) },
-              { label: "Poor framing", active: simulateFraming, onToggle: () => setSimulateFraming(v => !v) },
               { label: "Poor quality", active: simulateQuality, onToggle: () => setSimulateQuality(v => !v) },
             ] as const).map(({ label, active, onToggle }) => (
               <button
@@ -449,7 +462,7 @@ export function PreJoinPage() {
                 otherwise the same fallback photo covers video-off, camera error, and not-yet-acquired states. */}
             {isVideoOn && cameraStream && !cameraError ? (
               <video
-                ref={attachVideo}
+                ref={attachVideoAndTrack}
                 autoPlay
                 playsInline
                 muted
