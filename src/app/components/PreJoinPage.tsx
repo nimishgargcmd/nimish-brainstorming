@@ -240,7 +240,20 @@ export function PreJoinPage() {
   // Auto-enhance demo: build the raw (uncorrected) vs. enhanced filter for the self feed.
   // Lighting/quality are simulated; framing correction is real (see useFaceFraming above).
   const anyConditionSimulated = simulateLighting || simulateQuality;
-  const isAutoEnhancing = (autoEnhanceOn && anyConditionSimulated) || faceFraming.isCorrecting;
+  const manualEnhancingActive = autoEnhanceOn && anyConditionSimulated;
+  const isAutoEnhancing = manualEnhancingActive || faceFraming.isCorrecting;
+
+  // One-shot "AI made a change" sweep animation across the tile, replayed each time a
+  // poor-condition chip newly gets corrected (not on every continuous framing tick).
+  const [sweepKey, setSweepKey] = useState(0);
+  const prevManualEnhancingRef = useRef(false);
+  useEffect(() => {
+    if (manualEnhancingActive && !prevManualEnhancingRef.current) {
+      setSweepKey((k) => k + 1);
+    }
+    prevManualEnhancingRef.current = manualEnhancingActive;
+  }, [manualEnhancingActive]);
+
   const videoFilterParts: string[] = [];
   if (simulateLighting) {
     videoFilterParts.push(autoEnhanceOn ? "brightness(1.05) contrast(1.05)" : "brightness(0.45) contrast(0.85)");
@@ -475,6 +488,20 @@ export function PreJoinPage() {
                 alt="You"
                 className="absolute inset-0 w-full h-full object-cover pointer-events-none"
                 style={isVideoOn ? { filter: selfVideoFilter, transform: selfVideoTransform, objectFit: selfVideoObjectFit, transition: "filter 300ms ease, transform 300ms ease" } : undefined}
+              />
+            )}
+
+            {/* One-shot "AI made a change" sweep — replays (remounts via key) each time a chip newly gets corrected */}
+            {sweepKey > 0 && (
+              <div
+                key={sweepKey}
+                aria-hidden
+                className="animate-ai-sweep absolute inset-0 z-[15] pointer-events-none"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(100deg, rgba(255,255,255,0) 35%, rgba(255,255,255,0.55) 48%, rgba(168,152,250,0.6) 50%, rgba(255,255,255,0.55) 52%, rgba(255,255,255,0) 65%)",
+                  backgroundSize: "300% 100%",
+                }}
               />
             )}
 

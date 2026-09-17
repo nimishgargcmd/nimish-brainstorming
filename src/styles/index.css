@@ -30,3 +30,29 @@ body {
   overflow: hidden;
   overscroll-behavior: none;
 }
+
+/* Reels-style rotate-to-landscape hint (brainstorming/screensharing idea 1):
+   rotates 90deg, holds, rotates back, holds, then repeats while shown. */
+@keyframes rotate-hint-wobble {
+  0% { transform: rotate(0deg); }
+  16% { transform: rotate(90deg); }
+  50% { transform: rotate(90deg); }
+  66% { transform: rotate(0deg); }
+  100% { transform: rotate(0deg); }
+}
+.animate-rotate-hint {
+  animation: rotate-hint-wobble 2.2s ease-in-out infinite;
+}
+
+/* Video auto-enhance demo: one-shot diagonal "AI made a change" sweep across the self-tile,
+   triggered whenever a poor-condition chip newly gets corrected. */
+@keyframes ai-sweep {
+  0% { background-position: 160% 0; opacity: 0; }
+  10% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { background-position: -60% 0; opacity: 0; }
+}
+.animate-ai-sweep {
+  animation: ai-sweep 900ms ease-out 1;
+}
+
