@@ -71,6 +71,14 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
   // if the stream is re-acquired after a release.
   const videoElementsRef = useRef<Set<HTMLVideoElement>>(new Set());
 
+  // Multiple components (PreJoinPage, SelfVideoTile, MeetingPage, …) each call
+  // acquireCamera() on mount. Without coalescing, each fires its own concurrent
+  // getUserMedia() request; on some webcam drivers a second simultaneous open
+  // of the same device fails, and that straggler's catch block can clobber a
+  // sibling call's successful stream (cameraError=true wins even though a live
+  // stream exists). This ref makes concurrent callers share one real request.
+  const inFlightAcquireRef = useRef<Promise<void> | null>(null);
+
   // Helper: push the stream into all registered video elements.
   const pushStreamToElements = useCallback((s: MediaStream | null) => {
     videoElementsRef.current.forEach((el) => {
@@ -93,39 +101,51 @@ export function CameraProvider({ children }: { children: React.ReactNode }) {
       streamRef.current = null;
     }
 
-    setCameraStatus("requesting");
-    try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          facingMode: facingModeRef.current,
-        },
-        audio: false,
-      });
-
-      streamRef.current = mediaStream;
-      setStream(mediaStream);
-      setCameraStatus("active");
-      setCameraError(false);
-
-      // Push to all currently-mounted video elements.
-      pushStreamToElements(mediaStream);
-
-      // Listen for unexpected track end (e.g. browser revokes permission).
-      mediaStream.getVideoTracks().forEach((track) => {
-        track.addEventListener("ended", () => {
-          if (streamRef.current === mediaStream) {
-            streamRef.current = null;
-            setStream(null);
-            setCameraStatus("idle");
-          }
-        });
-      });
-    } catch {
-      setCameraError(true);
-      setCameraStatus("denied");
+    // A request is already in flight (from another concurrently-mounting
+    // consumer) — await that one instead of starting a second getUserMedia().
+    if (inFlightAcquireRef.current) {
+      return inFlightAcquireRef.current;
     }
+
+    setCameraStatus("requesting");
+    const request = (async () => {
+      try {
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: facingModeRef.current,
+          },
+          audio: false,
+        });
+
+        streamRef.current = mediaStream;
+        setStream(mediaStream);
+        setCameraStatus("active");
+        setCameraError(false);
+
+        // Push to all currently-mounted video elements.
+        pushStreamToElements(mediaStream);
+
+        // Listen for unexpected track end (e.g. browser revokes permission).
+        mediaStream.getVideoTracks().forEach((track) => {
+          track.addEventListener("ended", () => {
+            if (streamRef.current === mediaStream) {
+              streamRef.current = null;
+              setStream(null);
+              setCameraStatus("idle");
+            }
+          });
+        });
+      } catch {
+        setCameraError(true);
+        setCameraStatus("denied");
+      } finally {
+        inFlightAcquireRef.current = null;
+      }
+    })();
+    inFlightAcquireRef.current = request;
+    return request;
   }, [pushStreamToElements]);
 
   const flipCamera = useCallback(async () => {
