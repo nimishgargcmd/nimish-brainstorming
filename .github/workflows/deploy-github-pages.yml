@@ -32,7 +32,7 @@ jobs:
 
       - name: Build site
         env:
-          VITE_BASE_PATH: /Voice-Isolation-Noise-Suppression-Proto/
+          VITE_BASE_PATH: /nimish-screenshare-easyread-proto/
         run: |
           npm run build
           cp dist/index.html dist/404.html
