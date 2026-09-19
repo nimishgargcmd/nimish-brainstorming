@@ -18,10 +18,13 @@ import slideImg3 from "@/assets/figma/shared-content/Screenshot 2026-09-16 23584
 import slideImg4 from "@/assets/figma/shared-content/Screenshot 2026-09-16 235855.png";
 import slideImg5 from "@/assets/figma/shared-content/Screenshot 2026-09-16 235907.png";
 import slideImg6 from "@/assets/figma/shared-content/Screenshot 2026-09-16 235919.png";
-// Cropped to just the trend-line graphs — the one part of these two slides that's a genuine
-// image, not text, and so can't be reflowed (everything else is already captured as data above).
+// Cropped to just the non-text graphics (diagrams, photos, trend lines) — the parts of these
+// slides that can't be reflowed as text, so they're shown as images alongside the reflowed text.
+import slide1TimelineGraphic from "@/assets/figma/shared-content/slide1-timeline-graphic.png";
+import slide2DevicesGraphic from "@/assets/figma/shared-content/slide2-devices-graphic.png";
 import slide3TableGraphic from "@/assets/figma/shared-content/slide3-table-graphic.png";
 import slide4ChartGraphic from "@/assets/figma/shared-content/slide4-chart-graphic.png";
+import slide6PhotosGraphic from "@/assets/figma/shared-content/slide6-photos-graphic.png";
 
 export interface ChartData {
   title: string;
@@ -45,12 +48,12 @@ export interface CardItem {
 }
 
 export type Slide =
-  | { kind: "bullets"; title: string; subtitle: string; image: string; bullets: string[] }
-  | { kind: "chart"; title: string; subtitle: string; image: string; chart: ChartData; insight?: string; graphicImage: string }
-  | { kind: "table"; title: string; subtitle: string; image: string; table: TableData; graphicImage: string }
-  | { kind: "code"; title: string; subtitle: string; image: string; code: string[]; caption: string }
-  | { kind: "ladder"; title: string; subtitle: string; image: string; items: LadderItem[] }
-  | { kind: "cards"; title: string; subtitle: string; image: string; cards: CardItem[] };
+  | { kind: "bullets"; title: string; subtitle: string; image: string; bullets: string[]; graphicImage?: string; titleColor?: string }
+  | { kind: "chart"; title: string; subtitle: string; image: string; chart: ChartData; insight?: string; graphicImage?: string; titleColor?: string }
+  | { kind: "table"; title: string; subtitle: string; image: string; table: TableData; graphicImage?: string; titleColor?: string }
+  | { kind: "code"; title: string; subtitle: string; image: string; code: string[]; caption: string; graphicImage?: string; titleColor?: string }
+  | { kind: "ladder"; title: string; subtitle: string; image: string; items: LadderItem[]; graphicImage?: string; titleColor?: string }
+  | { kind: "cards"; title: string; subtitle: string; image: string; cards: CardItem[]; graphicImage?: string; titleColor?: string };
 
 export const DEMO_SLIDES: Slide[] = [
   {
@@ -58,6 +61,7 @@ export const DEMO_SLIDES: Slide[] = [
     title: "Rollout Timeline & Change management plan",
     subtitle: "Each phase is gated \u2014 requires zero Sev1/Sev2 and validated core workflows before proceeding",
     image: slideImg1,
+    graphicImage: slide1TimelineGraphic,
     items: [
       { title: "Pre-Rollout \u2014 Jan 2026", description: "MC announcement, Docs published" },
       { title: "MSD \u2014 Mar 2026", description: "Weekly MSD calls" },
@@ -75,6 +79,7 @@ export const DEMO_SLIDES: Slide[] = [
     title: "Converged administration in PMP",
     subtitle: "Unified management of Teams devices in a single portal (PMP)",
     image: slideImg2,
+    graphicImage: slide2DevicesGraphic,
     bullets: [
       "Delivering a unified admin experience.",
       "PMP \u2013 one single pane of glass for all device management",
@@ -122,6 +127,7 @@ export const DEMO_SLIDES: Slide[] = [
     title: "Customer Feedback Snapshot",
     subtitle: "Overall sentiment \u2014 Customers strongly validate PMP's unified Windows and Android management experience, noting that it addresses TAC feedback and adds valuable settings and update capabilities, while initial friction centers on Admin Agent readiness, URL allowlisting, OEM consistency, and rollout predictability.",
     image: slideImg5,
+    titleColor: "#5b5fc7",
     cards: [
       { title: "Unified PMP experience", description: "Customers see value in one portal for device management, with parity across Windows and Android experiences being appreciated.", tone: "positive" },
       { title: "Settings management", description: "Customers appreciate one settings template across device types; two-way sync in PMP also closes a current TAC gap for Android settings visibility.", tone: "positive" },
@@ -137,6 +143,8 @@ export const DEMO_SLIDES: Slide[] = [
     title: "Hybrid Work & Product Led Growth",
     subtitle: "Microsoft Teams Shared Space license - $104M",
     image: slideImg6,
+    graphicImage: slide6PhotosGraphic,
+    titleColor: "#5b5fc7",
     bullets: [
       "Hybrid Work Management",
       "Auto association (301 K+ AA Rooms, 522 K+ AA Peripherals and 3.5 K+ AA Desks) for BYOD Rooms & personal spaces.",

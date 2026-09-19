@@ -44,9 +44,9 @@ function ExpandIcon() {
   );
 }
 
-/** Full-width bar chart card \u2014 the quick-glance numbers, followed by the trend-line graphic
- *  (the one part of the slide that's a real image, not text, so it can't be reflowed). */
-function ReflowChart({ chart, graphicImage, title, onExpand }: { chart: ChartData; graphicImage: string; title: string; onExpand: () => void }) {
+/** Full-width bar chart card — the quick-glance numbers; the real trend-line graphic
+ *  (a genuine image, not text) is shown separately, right below this card. */
+function ReflowChart({ chart, onExpand }: { chart: ChartData; onExpand: () => void }) {
   return (
     <button
       type="button"
@@ -69,9 +69,6 @@ function ReflowChart({ chart, graphicImage, title, onExpand }: { chart: ChartDat
             </div>
           </div>
         ))}
-      </div>
-      <div className="rounded-[8px] border border-[#e1e1e1] overflow-hidden bg-white">
-        <img src={graphicImage} alt={`${title} \u2014 trend chart`} className="w-full h-auto block" />
       </div>
     </button>
   );
@@ -106,9 +103,8 @@ function ChartExpandOverlay({ chart, onClose }: { chart: ChartData; onClose: () 
 
 /** Table with the leftmost column frozen and the remaining columns horizontal-scroll — doc's spreadsheet-header pattern.
  *  A row with empty value/note cells (e.g. a section label like "Devices (MTR-A, Panels, Teams Phones)") renders as
- *  a bolded divider rather than a data row with blank cells. The trend-line graphic follows underneath — the one
- *  part of the slide that's a real image, not text, so it can't be reflowed. */
-function ReflowTable({ table, graphicImage, title }: { table: TableData; graphicImage: string; title: string }) {
+ *  a bolded divider rather than a data row with blank cells. */
+function ReflowTable({ table }: { table: TableData }) {
   const { headers, rows } = table;
   return (
     <div className="flex flex-col gap-[10px]">
@@ -152,9 +148,16 @@ function ReflowTable({ table, graphicImage, title }: { table: TableData; graphic
           </div>
         </div>
       </div>
-      <div className="rounded-[8px] border border-[#e1e1e1] overflow-hidden bg-white">
-        <img src={graphicImage} alt={`${title} \u2014 trend chart`} className="w-full h-auto block" />
-      </div>
+    </div>
+  );
+}
+
+/** The non-text visual a slide carries (diagram, photo, or trend-line graph) — shown as a real
+ *  image, scaled to width, right after the reflowed text/structured content it belongs to. */
+function ReflowGraphic({ src, title }: { src: string; title: string }) {
+  return (
+    <div className="rounded-[8px] border border-[#e1e1e1] overflow-hidden bg-white">
+      <img src={src} alt={`${title} \u2014 graphic`} className="w-full h-auto block" />
     </div>
   );
 }
@@ -211,16 +214,16 @@ function ReflowCards({ cards }: { cards: CardItem[] }) {
   );
 }
 
-/** The reflowed, portrait-native, no-pinch-zoom read. Only text truly reflows;
- *  chart/table keep their real slide image (the trend graphs aren't reflowable);
- *  code wraps. Always a light "paper" surface — matches the source slides'
+/** The reflowed, portrait-native, no-pinch-zoom read. Text truly reflows; any non-text visual
+ *  the slide carries (diagram, photo, trend-line graph) is kept as a real image, right after
+ *  the content it illustrates. Always a light "paper" surface — matches the source slides'
  *  own light theme rather than following the meeting app's own light/dark mode. */
 function ReflowBody({ slide, onExpandChart }: { slide: Slide; onExpandChart: () => void }) {
   return (
     <div className="flex flex-col gap-[18px] px-[16px] py-[18px]">
       <div className="flex flex-col gap-[4px]">
         <span className="text-[#616161] text-[12px] leading-[16px]">{slide.subtitle}</span>
-        <h1 className="text-[#212121] text-[22px] leading-[28px] font-semibold">{slide.title}</h1>
+        <h1 className="text-[22px] leading-[28px] font-semibold" style={{ color: slide.titleColor ?? "#212121" }}>{slide.title}</h1>
       </div>
 
       {slide.kind === "bullets" && (
@@ -236,20 +239,22 @@ function ReflowBody({ slide, onExpandChart }: { slide: Slide; onExpandChart: () 
 
       {slide.kind === "chart" && (
         <div className="flex flex-col gap-[10px]">
-          <ReflowChart chart={slide.chart} graphicImage={slide.graphicImage} title={slide.title} onExpand={onExpandChart} />
+          <ReflowChart chart={slide.chart} onExpand={onExpandChart} />
           {slide.insight && (
             <span className="text-[#616161] text-[13px] leading-[18px]">{slide.insight}</span>
           )}
         </div>
       )}
 
-      {slide.kind === "table" && <ReflowTable table={slide.table} graphicImage={slide.graphicImage} title={slide.title} />}
+      {slide.kind === "table" && <ReflowTable table={slide.table} />}
 
       {slide.kind === "code" && <ReflowCode code={slide.code} caption={slide.caption} />}
 
       {slide.kind === "ladder" && <ReflowLadder items={slide.items} />}
 
       {slide.kind === "cards" && <ReflowCards cards={slide.cards} />}
+
+      {slide.graphicImage && <ReflowGraphic src={slide.graphicImage} title={slide.title} />}
     </div>
   );
 }
