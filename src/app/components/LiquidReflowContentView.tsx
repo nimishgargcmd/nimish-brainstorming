@@ -152,12 +152,17 @@ function ReflowTable({ table }: { table: TableData }) {
   );
 }
 
-/** The non-text visual a slide carries (diagram, photo, or trend-line graph) — shown as a real
- *  image, scaled to width, right after the reflowed text/structured content it belongs to. */
-function ReflowGraphic({ src, title }: { src: string; title: string }) {
+/** The non-text visuals a slide carries (diagrams, photos, trend-line graphs) — each cropped to
+ *  a single item and shown one per row (not combined into one wide strip) so every item stays
+ *  legible at phone width, right after the reflowed text/structured content it belongs to. */
+function ReflowGraphics({ srcs, title }: { srcs: string[]; title: string }) {
   return (
-    <div className="rounded-[8px] border border-[#e1e1e1] overflow-hidden bg-white">
-      <img src={src} alt={`${title} \u2014 graphic`} className="w-full h-auto block" />
+    <div className="flex flex-col gap-[10px]">
+      {srcs.map((src, i) => (
+        <div key={src} className="rounded-[8px] border border-[#e1e1e1] overflow-hidden bg-white">
+          <img src={src} alt={`${title} \u2014 graphic ${i + 1} of ${srcs.length}`} className="w-full h-auto block" />
+        </div>
+      ))}
     </div>
   );
 }
@@ -254,7 +259,9 @@ function ReflowBody({ slide, onExpandChart }: { slide: Slide; onExpandChart: () 
 
       {slide.kind === "cards" && <ReflowCards cards={slide.cards} />}
 
-      {slide.graphicImage && <ReflowGraphic src={slide.graphicImage} title={slide.title} />}
+      {slide.graphicImages && slide.graphicImages.length > 0 && (
+        <ReflowGraphics srcs={slide.graphicImages} title={slide.title} />
+      )}
     </div>
   );
 }

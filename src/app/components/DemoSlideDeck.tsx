@@ -11,7 +11,7 @@
  * below to reflow the same content.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import slideImg1 from "@/assets/figma/shared-content/Screenshot 2026-09-16 235806.png";
 import slideImg2 from "@/assets/figma/shared-content/Screenshot 2026-09-16 235824.png";
 import slideImg3 from "@/assets/figma/shared-content/Screenshot 2026-09-16 235843.png";
@@ -19,12 +19,19 @@ import slideImg4 from "@/assets/figma/shared-content/Screenshot 2026-09-16 23585
 import slideImg5 from "@/assets/figma/shared-content/Screenshot 2026-09-16 235907.png";
 import slideImg6 from "@/assets/figma/shared-content/Screenshot 2026-09-16 235919.png";
 // Cropped to just the non-text graphics (diagrams, photos, trend lines) — the parts of these
-// slides that can't be reflowed as text, so they're shown as images alongside the reflowed text.
-import slide1TimelineGraphic from "@/assets/figma/shared-content/slide1-timeline-graphic.png";
+// slides that can't be reflowed as text. Split into one image per distinct item (each chart,
+// each photo) rather than one combined strip, so every item stays legible when placed 1-by-1.
+import slide1TimelinePart1 from "@/assets/figma/shared-content/slide1-timeline-part1.png";
+import slide1TimelinePart2 from "@/assets/figma/shared-content/slide1-timeline-part2.png";
+import slide1TimelinePart3 from "@/assets/figma/shared-content/slide1-timeline-part3.png";
 import slide2DevicesGraphic from "@/assets/figma/shared-content/slide2-devices-graphic.png";
-import slide3TableGraphic from "@/assets/figma/shared-content/slide3-table-graphic.png";
-import slide4ChartGraphic from "@/assets/figma/shared-content/slide4-chart-graphic.png";
-import slide6PhotosGraphic from "@/assets/figma/shared-content/slide6-photos-graphic.png";
+import slide3ChartLeft from "@/assets/figma/shared-content/slide3-chart-left.png";
+import slide3ChartRight from "@/assets/figma/shared-content/slide3-chart-right.png";
+import slide4ChartMtra from "@/assets/figma/shared-content/slide4-chart-mtra.png";
+import slide4ChartPanels from "@/assets/figma/shared-content/slide4-chart-panels.png";
+import slide4ChartPhones from "@/assets/figma/shared-content/slide4-chart-phones.png";
+import slide6PhotoLeft from "@/assets/figma/shared-content/slide6-photo-left.png";
+import slide6PhotoRight from "@/assets/figma/shared-content/slide6-photo-right.png";
 
 export interface ChartData {
   title: string;
@@ -48,12 +55,12 @@ export interface CardItem {
 }
 
 export type Slide =
-  | { kind: "bullets"; title: string; subtitle: string; image: string; bullets: string[]; graphicImage?: string; titleColor?: string }
-  | { kind: "chart"; title: string; subtitle: string; image: string; chart: ChartData; insight?: string; graphicImage?: string; titleColor?: string }
-  | { kind: "table"; title: string; subtitle: string; image: string; table: TableData; graphicImage?: string; titleColor?: string }
-  | { kind: "code"; title: string; subtitle: string; image: string; code: string[]; caption: string; graphicImage?: string; titleColor?: string }
-  | { kind: "ladder"; title: string; subtitle: string; image: string; items: LadderItem[]; graphicImage?: string; titleColor?: string }
-  | { kind: "cards"; title: string; subtitle: string; image: string; cards: CardItem[]; graphicImage?: string; titleColor?: string };
+  | { kind: "bullets"; title: string; subtitle: string; image: string; bullets: string[]; graphicImages?: string[]; titleColor?: string }
+  | { kind: "chart"; title: string; subtitle: string; image: string; chart: ChartData; insight?: string; graphicImages?: string[]; titleColor?: string }
+  | { kind: "table"; title: string; subtitle: string; image: string; table: TableData; graphicImages?: string[]; titleColor?: string }
+  | { kind: "code"; title: string; subtitle: string; image: string; code: string[]; caption: string; graphicImages?: string[]; titleColor?: string }
+  | { kind: "ladder"; title: string; subtitle: string; image: string; items: LadderItem[]; graphicImages?: string[]; titleColor?: string }
+  | { kind: "cards"; title: string; subtitle: string; image: string; cards: CardItem[]; graphicImages?: string[]; titleColor?: string };
 
 export const DEMO_SLIDES: Slide[] = [
   {
@@ -61,7 +68,7 @@ export const DEMO_SLIDES: Slide[] = [
     title: "Rollout Timeline & Change management plan",
     subtitle: "Each phase is gated \u2014 requires zero Sev1/Sev2 and validated core workflows before proceeding",
     image: slideImg1,
-    graphicImage: slide1TimelineGraphic,
+    graphicImages: [slide1TimelinePart1, slide1TimelinePart2, slide1TimelinePart3],
     items: [
       { title: "Pre-Rollout \u2014 Jan 2026", description: "MC announcement, Docs published" },
       { title: "MSD \u2014 Mar 2026", description: "Weekly MSD calls" },
@@ -79,7 +86,7 @@ export const DEMO_SLIDES: Slide[] = [
     title: "Converged administration in PMP",
     subtitle: "Unified management of Teams devices in a single portal (PMP)",
     image: slideImg2,
-    graphicImage: slide2DevicesGraphic,
+    graphicImages: [slide2DevicesGraphic],
     bullets: [
       "Delivering a unified admin experience.",
       "PMP \u2013 one single pane of glass for all device management",
@@ -92,7 +99,7 @@ export const DEMO_SLIDES: Slide[] = [
     title: "PMP Adoption",
     subtitle: "Managed tenants and devices (excluding Teams windows devices and SIP) in PMP compared to TAC.",
     image: slideImg3,
-    graphicImage: slide3TableGraphic,
+    graphicImages: [slide3ChartLeft, slide3ChartRight],
     table: {
       headers: ["Metric", "Value", "Note"],
       rows: [
@@ -112,7 +119,7 @@ export const DEMO_SLIDES: Slide[] = [
     title: "Device type migration progress",
     subtitle: "Combined across NOAM \u00b7 EMEA \u00b7 APAC",
     image: slideImg4,
-    graphicImage: slide4ChartGraphic,
+    graphicImages: [slide4ChartMtra, slide4ChartPanels, slide4ChartPhones],
     chart: {
       title: "PMP Connected of TAC online",
       bars: [
@@ -143,7 +150,7 @@ export const DEMO_SLIDES: Slide[] = [
     title: "Hybrid Work & Product Led Growth",
     subtitle: "Microsoft Teams Shared Space license - $104M",
     image: slideImg6,
-    graphicImage: slide6PhotosGraphic,
+    graphicImages: [slide6PhotoLeft, slide6PhotoRight],
     titleColor: "#5b5fc7",
     bullets: [
       "Hybrid Work Management",
@@ -155,18 +162,131 @@ export const DEMO_SLIDES: Slide[] = [
   },
 ];
 
-/** One slide preview \u2014 the actual slide screenshot, shown at its exact
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 4;
+const ZOOM_DOUBLE_TAP = 2;
+
+type ZoomGesture =
+  | { mode: "pinch"; startDist: number; startScale: number }
+  | { mode: "pan"; startX: number; startY: number; startTx: number; startTy: number };
+
+/** Pinch-to-zoom + one-finger pan + double-tap-to-zoom, scoped to just the slide image
+ *  it's attached to (via a ref) — the rest of the page (swipe-between-slides, page scroll)
+ *  is untouched. Uses native (non-passive) touch listeners so `preventDefault` actually
+ *  stops the browser's own page-zoom/scroll while a gesture is happening on this image;
+ *  React's synthetic touch handlers are passive by default and can't do that. A real
+ *  pinch (not just the double-tap fallback) now also feeds idea 1's rotate-hint signal. */
+function useSlideZoom(onZoomAttempt?: () => void) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const [tx, setTx] = useState(0);
+  const [ty, setTy] = useState(0);
+  const scaleRef = useRef(1);
+  const txRef = useRef(0);
+  const tyRef = useRef(0);
+  const gestureRef = useRef<ZoomGesture | null>(null);
+  useEffect(() => { scaleRef.current = scale; }, [scale]);
+  useEffect(() => { txRef.current = tx; }, [tx]);
+  useEffect(() => { tyRef.current = ty; }, [ty]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const clamp = (s: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, s));
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        const [a, b] = [e.touches[0], e.touches[1]];
+        const startDist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+        gestureRef.current = { mode: "pinch", startDist, startScale: scaleRef.current };
+        onZoomAttempt?.();
+      } else if (e.touches.length === 1 && scaleRef.current > 1) {
+        const t = e.touches[0];
+        gestureRef.current = { mode: "pan", startX: t.clientX, startY: t.clientY, startTx: txRef.current, startTy: tyRef.current };
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const g = gestureRef.current;
+      if (!g) return;
+      if (g.mode === "pinch" && e.touches.length === 2) {
+        e.preventDefault();
+        const [a, b] = [e.touches[0], e.touches[1]];
+        const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+        setScale(clamp(g.startScale * (dist / g.startDist)));
+      } else if (g.mode === "pan" && e.touches.length === 1) {
+        e.preventDefault();
+        const t = e.touches[0];
+        setTx(g.startTx + (t.clientX - g.startX));
+        setTy(g.startTy + (t.clientY - g.startY));
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length > 0) return;
+      gestureRef.current = null;
+      if (scaleRef.current <= 1.02) { setScale(1); setTx(0); setTy(0); }
+    };
+
+    // Trackpad pinch (Chrome/Safari report it as a ctrl+wheel gesture) or explicit ctrl+scroll —
+    // left alone otherwise so normal scrolling/swiping is unaffected.
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      onZoomAttempt?.();
+      setScale((s) => clamp(s - e.deltaY * 0.01));
+    };
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    el.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchEnd);
+      el.removeEventListener("wheel", onWheel);
+    };
+  }, [onZoomAttempt]);
+
+  const onDoubleClick = () => {
+    onZoomAttempt?.();
+    setScale((s) => {
+      const zoomedIn = s <= 1;
+      if (!zoomedIn) { setTx(0); setTy(0); }
+      return zoomedIn ? ZOOM_DOUBLE_TAP : 1;
+    });
+  };
+
+  return { containerRef, scale, tx, ty, isZoomed: scale > 1, onDoubleClick };
+}
+
+/** One slide preview — the actual slide screenshot, shown at its exact
  *  aspect ratio (letterboxed, never cropped) within the shared-content frame.
- *  This is the real deck as it would look on a screen share. A double-tap/
- *  double-click stands in for a pinch-zoom gesture (feeds idea 1's struggle signal). */
+ *  This is the real deck as it would look on a screen share. Pinch (or trackpad-pinch/
+ *  ctrl+scroll) zooms just this image in place; double-tap toggles a 2x zoom. Both feed
+ *  idea 1's rotate-hint signal via `onZoomAttempt`. Scoped entirely to this card — the
+ *  rest of the page and the swipe-between-slides gesture are untouched. */
 export function OriginalSlideCard({ slide, onZoomAttempt }: { slide: Slide; onZoomAttempt?: () => void }) {
+  const { containerRef, scale, tx, ty, isZoomed, onDoubleClick } = useSlideZoom(onZoomAttempt);
   return (
-    <div className="w-full h-full flex items-center justify-center bg-fy27-surface-card">
+    <div
+      ref={containerRef}
+      className="w-full h-full flex items-center justify-center bg-fy27-surface-card overflow-hidden"
+      style={{ touchAction: isZoomed ? "none" : "auto" }}
+    >
       <img
         src={slide.image}
         alt={slide.title}
-        onDoubleClick={onZoomAttempt}
-        className="max-w-full max-h-full object-contain"
+        onDoubleClick={onDoubleClick}
+        draggable={false}
+        className="max-w-full max-h-full object-contain select-none"
+        style={{
+          transform: `translate(${tx}px, ${ty}px) scale(${scale})`,
+          transition: isZoomed ? "none" : "transform 150ms ease-out",
+        }}
       />
     </div>
   );
