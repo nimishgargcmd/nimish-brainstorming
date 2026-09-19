@@ -139,10 +139,14 @@ export function PreJoinPage() {
 
   useEffect(() => {
     if (!enhanceIntroPending || !hasLiveStream) return;
-    const timer = setTimeout(() => {
+    let cancelled = false;
+    const finishIntro = () => {
+      if (cancelled) return;
       setAutoEnhanceOn(true);
       setEnhanceIntroPending(false);
       markEnhanceIntroSeen();
+    };
+    const timer = setTimeout(() => {
       const button = enhanceButtonRef.current;
       if (button && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
         enhanceIntroAnimationRef.current = button.animate([
@@ -153,12 +157,20 @@ export function PreJoinPage() {
           { transform: "scale(1)", offset: 0.8 },
           { transform: "scale(1)", backgroundColor: getComputedStyle(button).getPropertyValue("--fy27-brand-primary").trim() },
         ], { duration: 5000, easing: "ease-in-out" });
+        enhanceIntroAnimationRef.current.onfinish = finishIntro;
+      } else {
+        finishIntro();
       }
     }, 700);
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      if (enhanceIntroAnimationRef.current) {
+        enhanceIntroAnimationRef.current.onfinish = null;
+        enhanceIntroAnimationRef.current.cancel();
+      }
+    };
   }, [enhanceIntroPending, hasLiveStream]);
-
-  useEffect(() => () => enhanceIntroAnimationRef.current?.cancel(), []);
 
   // Real-time detection drives all three corrections (only meaningful once a live stream exists).
   const faceFraming = useFaceFraming(videoEl, hasLiveStream, autoEnhanceOn);
