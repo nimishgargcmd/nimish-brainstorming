@@ -20,6 +20,8 @@ interface MeetingViewsProps {
   onOpenReflow?: () => void;
   onZoomAttempt?: () => void;
   showRotateHint?: boolean;
+  onSlideScaleComputed?: (index: number, scale: number) => void;
+  isContentLoading?: boolean;
   activeSlideIndex?: number;
   onActiveSlideIndexChange?: (index: number) => void;
   // ignored (kept so it drops into the SwipeableViews slot)
@@ -39,6 +41,8 @@ export function MeetingViewsGallery({
   onOpenReflow,
   onZoomAttempt,
   showRotateHint,
+  onSlideScaleComputed,
+  isContentLoading,
   activeSlideIndex,
   onActiveSlideIndexChange,
 }: MeetingViewsProps) {
@@ -52,6 +56,8 @@ export function MeetingViewsGallery({
         onOpenReflow={onOpenReflow}
         onZoomAttempt={onZoomAttempt}
         showRotateHint={showRotateHint}
+        onSlideScaleComputed={onSlideScaleComputed}
+        isContentLoading={isContentLoading}
         activeSlideIndex={activeSlideIndex}
         onActiveSlideIndexChange={onActiveSlideIndexChange}
       />

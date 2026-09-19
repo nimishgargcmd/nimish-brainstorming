@@ -3,7 +3,8 @@ import { MeetingTile } from "@/app/components/MeetingTile";
 import { useActiveMeeting } from "@/app/components/ActiveMeetingContext";
 import { ParticipantOptionsSheet, type PersonBadge } from "@/app/components/ParticipantOptionsSheet";
 import { useLongPress } from "@/app/lib/useLongPress";
-import { SharedContentShare } from "@/app/components/versions/mvp/SharedContentShare";
+import { SharedContentShare, SharedContentLoading } from "@/app/components/versions/mvp/SharedContentShare";
+import { OriginalSlideDeckStrip } from "@/app/components/DemoSlideDeck";
 import { ParticipantTray } from "@/app/components/versions/mvp/ParticipantTray";
 import { buildOrderedStagePeople, type StagePerson } from "@/app/lib/stagePeople";
 import imgSlideshow from "@/assets/figma/shared-content/slideshow-share.png";
@@ -34,6 +35,8 @@ interface MeetingStageCheckpointProps {
   onOpenReflow?: () => void;
   onZoomAttempt?: () => void;
   showRotateHint?: boolean;
+  onSlideScaleComputed?: (index: number, scale: number) => void;
+  isContentLoading?: boolean;
   activeSlideIndex?: number;
   onActiveSlideIndexChange?: (index: number) => void;
   isMicOn?: boolean;
@@ -61,6 +64,8 @@ export function MeetingStageCheckpoint({
   onOpenReflow,
   onZoomAttempt,
   showRotateHint,
+  onSlideScaleComputed,
+  isContentLoading,
   activeSlideIndex,
   onActiveSlideIndexChange,
   isMicOn = true,
@@ -123,7 +128,14 @@ export function MeetingStageCheckpoint({
       <div className="bg-fy27-surface flex flex-col relative h-full pb-1">
         <button onClick={onCollapseSplit} className="w-full h-full p-[2px]">
           {isContentSharing ? (
-            <MeetingTile name={SHARER} nameTag={`${SHARER}'s content`} display="shared" sharedSrc={imgSlideshow} />
+            isContentLoading ? (
+              <div className="relative h-full">
+                <div className="absolute inset-0 invisible">
+                  <OriginalSlideDeckStrip activeIndex={activeSlideIndex} onSlideScaleComputed={onSlideScaleComputed} />
+                </div>
+                <SharedContentLoading compact />
+              </div>
+            ) : <MeetingTile name={SHARER} nameTag={`${SHARER}'s content`} display="shared" sharedSrc={imgSlideshow} />
           ) : active ? (
             <MeetingTile
               name={active.name}
@@ -151,6 +163,8 @@ export function MeetingStageCheckpoint({
             onReflow={onOpenReflow}
             onZoomAttempt={onZoomAttempt}
             showRotateHint={showRotateHint}
+            onSlideScaleComputed={onSlideScaleComputed}
+            isContentLoading={isContentLoading}
             activeSlideIndex={activeSlideIndex}
             onActiveSlideIndexChange={onActiveSlideIndexChange}
             splitLayout

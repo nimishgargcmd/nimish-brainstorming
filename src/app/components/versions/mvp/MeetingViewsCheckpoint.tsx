@@ -16,6 +16,8 @@ interface MeetingViewsProps {
   onOpenReflow?: () => void;
   onZoomAttempt?: () => void;
   showRotateHint?: boolean;
+  onSlideScaleComputed?: (index: number, scale: number) => void;
+  isContentLoading?: boolean;
   activeSlideIndex?: number;
   onActiveSlideIndexChange?: (index: number) => void;
   isMicOn?: boolean;
@@ -35,6 +37,8 @@ export function MeetingViewsCheckpoint({
   onOpenReflow,
   onZoomAttempt,
   showRotateHint,
+  onSlideScaleComputed,
+  isContentLoading,
   activeSlideIndex,
   onActiveSlideIndexChange,
   isMicOn,
@@ -52,6 +56,8 @@ export function MeetingViewsCheckpoint({
         onOpenReflow={onOpenReflow}
         onZoomAttempt={onZoomAttempt}
         showRotateHint={showRotateHint}
+        onSlideScaleComputed={onSlideScaleComputed}
+        isContentLoading={isContentLoading}
         activeSlideIndex={activeSlideIndex}
         onActiveSlideIndexChange={onActiveSlideIndexChange}
         isMicOn={isMicOn}

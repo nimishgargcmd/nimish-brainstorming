@@ -4,7 +4,8 @@ import { useActiveMeeting } from "@/app/components/ActiveMeetingContext";
 import { GALLERY_ROSTER } from "@/app/lib/meetingRoster";
 import { ParticipantOptionsSheet, type PersonBadge } from "@/app/components/ParticipantOptionsSheet";
 import { useLongPress } from "@/app/lib/useLongPress";
-import { SharedContentShare } from "@/app/components/versions/mvp/SharedContentShare";
+import { SharedContentShare, SharedContentLoading } from "@/app/components/versions/mvp/SharedContentShare";
+import { OriginalSlideDeckStrip } from "@/app/components/DemoSlideDeck";
 import imgSlideshow from "@/assets/figma/shared-content/slideshow-share.png";
 
 /** Square tile wrapper that opens the participant options sheet on long-press. */
@@ -30,6 +31,8 @@ interface MeetingStageGalleryProps {
   onOpenReflow?: () => void;
   onZoomAttempt?: () => void;
   showRotateHint?: boolean;
+  onSlideScaleComputed?: (index: number, scale: number) => void;
+  isContentLoading?: boolean;
   activeSlideIndex?: number;
   onActiveSlideIndexChange?: (index: number) => void;
 }
@@ -50,6 +53,8 @@ export function MeetingStageGallery({
   onOpenReflow,
   onZoomAttempt,
   showRotateHint,
+  onSlideScaleComputed,
+  isContentLoading,
   activeSlideIndex,
   onActiveSlideIndexChange,
 }: MeetingStageGalleryProps) {
@@ -94,7 +99,14 @@ export function MeetingStageGallery({
       <div className="bg-fy27-surface flex flex-col relative h-full pb-1">
         <button onClick={onCollapseSplit} className="w-full h-full p-[2px]">
           {isContentSharing ? (
-            <MeetingTile name={SHARER} nameTag={`${SHARER}'s content`} display="shared" sharedSrc={imgSlideshow} />
+            isContentLoading ? (
+              <div className="relative h-full">
+                <div className="absolute inset-0 invisible">
+                  <OriginalSlideDeckStrip activeIndex={activeSlideIndex} onSlideScaleComputed={onSlideScaleComputed} />
+                </div>
+                <SharedContentLoading compact />
+              </div>
+            ) : <MeetingTile name={SHARER} nameTag={`${SHARER}'s content`} display="shared" sharedSrc={imgSlideshow} />
           ) : (
             <MeetingTile
               name={active.name}
@@ -120,6 +132,8 @@ export function MeetingStageGallery({
             onReflow={onOpenReflow}
             onZoomAttempt={onZoomAttempt}
             showRotateHint={showRotateHint}
+            onSlideScaleComputed={onSlideScaleComputed}
+            isContentLoading={isContentLoading}
             activeSlideIndex={activeSlideIndex}
             onActiveSlideIndexChange={onActiveSlideIndexChange}
           />

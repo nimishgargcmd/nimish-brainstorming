@@ -75,8 +75,21 @@ const VOICE_ISOLATION_SPEAKER_NUDGE_ID = "voice-isolation-speaker-turn-off";
 const DEFAULT_UFD_DISMISS_MS = 4000;
 const VOICE_NOISE_NUDGE_DISMISS_MS = 10000;
 // Promote-landscape rotate-hint icon (brainstorming/screensharing idea 1).
-const ROTATE_HINT_SHOW_DELAY_MS = 5000;
-const ROTATE_HINT_VISIBLE_MS = 4000;
+const ROTATE_HINT_SHOW_DELAY_MS = 3000;
+const ROTATE_HINT_VISIBLE_MS = 8000;
+const SCREENSHARE_DEMO_LOADING_MS = 2500;
+// Lingering on the same slide without swiping is treated the same as a struggle signal.
+const ROTATE_HINT_DWELL_MS = 6000;
+// Below this object-contain scale factor, the slide is objectively too small to read —
+// fires immediately, no need to wait for a behavioral signal.
+const ROTATE_HINT_LEGIBILITY_SCALE = 0.3;
+
+// True once the device's own reported orientation is landscape — the hint is pointless then.
+function isLandscapeOrientation(): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.matchMedia) return window.matchMedia("(orientation: landscape)").matches;
+  return window.innerWidth > window.innerHeight;
+}
 
 export function MeetingPage() {
   const navigate = useNavigate();
@@ -159,6 +172,12 @@ export function MeetingPage() {
   // │  CONTENT SHARING TOGGLE                                            │
   // └─────────────────────────────────────────────────────────────────────┘
   const [isContentSharing, setIsContentSharing] = useState(meeting.isContentSharing);
+  const [hasSharedSlideLoaded, setHasSharedSlideLoaded] = useState(false);
+  const [shareLoadingDelayElapsed, setShareLoadingDelayElapsed] = useState(false);
+  const isSharedContentReady = isContentSharing && hasSharedSlideLoaded && shareLoadingDelayElapsed;
+  const sharedContentReadyRef = useRef(false);
+  sharedContentReadyRef.current = isSharedContentReady;
+  const rotateHintPendingRef = useRef(false);
 
   // Fullscreen shared content view — immersive landscape mode
   const [isFullscreenContent, setIsFullscreenContent] = useState(false);
@@ -170,13 +189,24 @@ export function MeetingPage() {
   const [stageSlideIndex, setStageSlideIndex] = useState(0);
 
   // Promote-landscape rotate-hint icon (brainstorming/screensharing idea 1) — small animated
-  // icon next to the easy-read button, shown once per share (5s in, or 2 zoom attempts).
+  // icon next to the easy-read button, shown once per share.
   const [showRotateHint, setShowRotateHint] = useState(false);
   const zoomAttemptCountRef = useRef(0);
   const rotateHintFiredRef = useRef(false);
   const rotateHintShowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rotateHintHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rotateHintDwellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevIsContentSharingForNudgeRef = useRef(isContentSharing);
+  // Per-slide legibility (brainstorming/screensharing idea 1, condition 1): how small the
+  // active slide is actually rendering at the current frame width — object-contain's true
+  // scale factor, not a guess. Below threshold fires the hint immediately, no timer needed.
+  const slideScalesRef = useRef<Map<number, number>>(new Map());
+  // Demo-only stand-in for "the presenter is actively annotating" (condition 2) — a real
+  // product would key this off actual ink/pointer activity, not a manual toggle.
+  const [isPresenterAnnotating, setIsPresenterAnnotating] = useState(false);
+  // Ref mirror of activePanel — read inside the stable triggerRotateHint callback so it
+  // always sees the latest "is a panel open" state without needing it in its deps.
+  const activePanelRef = useRef<typeof activePanel>(null);
 
   // Current view state (0: on-the-go, 1: gallery, 2: focus)
   const [currentView, setCurrentView] = useState(1);
@@ -699,11 +729,21 @@ export function MeetingPage() {
     advanceNotification();
   }, [advanceNotification]);
 
+  // Ref mirror of activePanel — kept fresh for the stable triggerRotateHint callback below.
+  useEffect(() => {
+    activePanelRef.current = activePanel;
+  }, [activePanel]);
+
   // Promote-landscape hint (brainstorming/screensharing idea 1): a small animated rotate
   // icon (Reels-style — rotates 90deg and back) next to the easy-read button, shown once per
-  // share either 5s after sharing starts or as soon as the user double-taps/zooms twice.
+  // share — 3s after sharing starts, on 2 zoom/pinch attempts, or after lingering on the same
+  // slide for a while. Suppressed (and cleared early) if the device is already in landscape.
   const triggerRotateHint = useCallback(() => {
-    if (rotateHintFiredRef.current) return;
+    // Already landscape, or the user's attention is on a panel (chat/copilot/notes/etc.) —
+    // don't consume the one-shot; a later attempt once they're back on the stage can still fire.
+    if (!sharedContentReadyRef.current || rotateHintFiredRef.current || isLandscapeOrientation()) return;
+    if (activePanelRef.current) { rotateHintPendingRef.current = true; return; }
+    rotateHintPendingRef.current = false;
     rotateHintFiredRef.current = true;
     if (rotateHintShowTimerRef.current) clearTimeout(rotateHintShowTimerRef.current);
     setShowRotateHint(true);
@@ -711,19 +751,95 @@ export function MeetingPage() {
     rotateHintHideTimerRef.current = setTimeout(() => setShowRotateHint(false), ROTATE_HINT_VISIBLE_MS);
   }, []);
 
+  // Split-attention suppression — while a panel (chat/copilot/notes/more/etc.) is open, the
+  // user's attention isn't on the stage; retry once they close it and come back.
+  useEffect(() => {
+    if (activePanel === null && isContentSharing && rotateHintPendingRef.current) triggerRotateHint();
+  }, [activePanel, isContentSharing, triggerRotateHint]);
+
+  // Demo-only "presenter is annotating" signal — a real product would key this off actual
+  // ink/pointer activity; annotations are especially hard to see small, so this fires
+  // immediately rather than waiting on a timer.
+  useEffect(() => {
+    if (isPresenterAnnotating && isSharedContentReady) triggerRotateHint();
+  }, [isPresenterAnnotating, isSharedContentReady, triggerRotateHint]);
+
+  const handleToggleAnnotationDemo = useCallback(() => {
+    setIsPresenterAnnotating((prev) => !prev);
+  }, []);
+
+  // Legibility signal — an objectively-computed "this slide is rendering too small to read"
+  // check (real object-contain scale factor), rather than waiting on user behavior.
+  const handleSlideScaleComputed = useCallback((index: number, scale: number) => {
+    slideScalesRef.current.set(index, scale);
+    if (!isContentSharing || index !== stageSlideIndex) return;
+    setHasSharedSlideLoaded(true);
+    if (scale < ROTATE_HINT_LEGIBILITY_SCALE) triggerRotateHint();
+  }, [isContentSharing, stageSlideIndex, triggerRotateHint]);
+
+  // Re-check the newly active slide's (already-known) scale when the user swipes —
+  // covers slides whose image finished loading before they became the active one.
+  useEffect(() => {
+    if (!isSharedContentReady) return;
+    const scale = slideScalesRef.current.get(stageSlideIndex);
+    if (scale !== undefined && scale < ROTATE_HINT_LEGIBILITY_SCALE) triggerRotateHint();
+  }, [stageSlideIndex, isSharedContentReady, triggerRotateHint]);
+
+  // If the device is rotated to landscape while sharing — the goal is already met — clear
+  // any pending show-timer and hide the hint early instead of waiting out its auto-dismiss.
+  useEffect(() => {
+    if (!isContentSharing) return;
+    const handleOrientationChange = () => {
+      if (!isLandscapeOrientation()) return;
+      if (!sharedContentReadyRef.current) rotateHintFiredRef.current = true;
+      if (rotateHintShowTimerRef.current) { clearTimeout(rotateHintShowTimerRef.current); rotateHintShowTimerRef.current = null; }
+      if (rotateHintHideTimerRef.current) { clearTimeout(rotateHintHideTimerRef.current); rotateHintHideTimerRef.current = null; }
+      setShowRotateHint(false);
+    };
+    window.addEventListener("resize", handleOrientationChange);
+    return () => window.removeEventListener("resize", handleOrientationChange);
+  }, [isContentSharing]);
+
+  // Dwell signal — staying on the same slide without swiping for a while also reads as
+  // a struggle signal, same as repeated pinch attempts.
+  useEffect(() => {
+    if (rotateHintDwellTimerRef.current) clearTimeout(rotateHintDwellTimerRef.current);
+    if (!isSharedContentReady) return;
+    rotateHintDwellTimerRef.current = setTimeout(() => triggerRotateHint(), ROTATE_HINT_DWELL_MS);
+    return () => { if (rotateHintDwellTimerRef.current) clearTimeout(rotateHintDwellTimerRef.current); };
+  }, [isSharedContentReady, stageSlideIndex, triggerRotateHint]);
+
+  useEffect(() => {
+    if (!isContentSharing) {
+      setHasSharedSlideLoaded(false);
+      setShareLoadingDelayElapsed(false);
+      slideScalesRef.current.clear();
+      return;
+    }
+    const timer = setTimeout(() => setShareLoadingDelayElapsed(true), SCREENSHARE_DEMO_LOADING_MS);
+    return () => clearTimeout(timer);
+  }, [isContentSharing]);
+
+  useEffect(() => {
+    if (!isSharedContentReady) return;
+    rotateHintShowTimerRef.current = setTimeout(() => triggerRotateHint(), ROTATE_HINT_SHOW_DELAY_MS);
+    return () => { if (rotateHintShowTimerRef.current) clearTimeout(rotateHintShowTimerRef.current); };
+  }, [isSharedContentReady, triggerRotateHint]);
+
   useEffect(() => {
     if (isContentSharing && !prevIsContentSharingForNudgeRef.current) {
       zoomAttemptCountRef.current = 0;
       rotateHintFiredRef.current = false;
       setShowRotateHint(false);
       if (rotateHintShowTimerRef.current) clearTimeout(rotateHintShowTimerRef.current);
-      rotateHintShowTimerRef.current = setTimeout(() => triggerRotateHint(), ROTATE_HINT_SHOW_DELAY_MS);
+      rotateHintPendingRef.current = false;
     }
     if (!isContentSharing) {
       if (rotateHintShowTimerRef.current) clearTimeout(rotateHintShowTimerRef.current);
       if (rotateHintHideTimerRef.current) clearTimeout(rotateHintHideTimerRef.current);
       zoomAttemptCountRef.current = 0;
       rotateHintFiredRef.current = false;
+      rotateHintPendingRef.current = false;
       setShowRotateHint(false);
     }
     prevIsContentSharingForNudgeRef.current = isContentSharing;
@@ -734,6 +850,7 @@ export function MeetingPage() {
     return () => {
       if (rotateHintShowTimerRef.current) clearTimeout(rotateHintShowTimerRef.current);
       if (rotateHintHideTimerRef.current) clearTimeout(rotateHintHideTimerRef.current);
+      if (rotateHintDwellTimerRef.current) clearTimeout(rotateHintDwellTimerRef.current);
     };
   }, []);
 
@@ -1290,6 +1407,8 @@ export function MeetingPage() {
                   onOpenReflow={handleOpenReflow}
                   onZoomAttempt={handleContentZoomAttempt}
                   showRotateHint={showRotateHint}
+                  onSlideScaleComputed={handleSlideScaleComputed}
+                  isContentLoading={!isSharedContentReady}
                   activeSlideIndex={stageSlideIndex}
                   onActiveSlideIndexChange={setStageSlideIndex}
                   activeEmoji={activeEmoji}
@@ -1323,6 +1442,8 @@ export function MeetingPage() {
               onOpenReflow={handleOpenReflow}
               onZoomAttempt={handleContentZoomAttempt}
               showRotateHint={showRotateHint}
+              onSlideScaleComputed={handleSlideScaleComputed}
+              isContentLoading={!isSharedContentReady}
               activeSlideIndex={stageSlideIndex}
               onActiveSlideIndexChange={setStageSlideIndex}
               activeEmoji={activeEmoji}
@@ -1421,6 +1542,8 @@ export function MeetingPage() {
             setInitialView={setMorePanelInitialView}
             isContentSharing={isContentSharing}
             onContentSharingToggle={handleContentSharingToggle}
+            isPresenterAnnotating={isPresenterAnnotating}
+            onToggleAnnotationDemo={handleToggleAnnotationDemo}
             isAudioOnly={isAudioOnly}
             onAudioOnlyToggle={handleAudioOnlyToggle}
             raisedHands={displayRaisedHands}

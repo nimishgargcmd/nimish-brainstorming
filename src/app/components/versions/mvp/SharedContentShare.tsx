@@ -1,5 +1,18 @@
 import { SlideshowControlBar } from "@/app/components/versions/mvp/SlideshowControlBar";
 import { OriginalSlideDeckStrip, DEMO_SLIDES } from "@/app/components/DemoSlideDeck";
+import { LoaderCircle } from "lucide-react";
+
+export function SharedContentLoading({ compact = false }: { compact?: boolean }) {
+  return (
+    <div role="status" className={`w-full h-full flex flex-col items-center justify-center gap-3 py-3 bg-fy27-surface text-center ${compact ? "pl-4 pr-[100px]" : "px-6"}`}>
+      <LoaderCircle aria-hidden="true" className="size-6 shrink-0 text-fy27-icon-secondary motion-safe:animate-spin" />
+      <p className="text-[15px] leading-5 text-fy27-text-primary">Loading shared content...</p>
+      <p className="max-w-[280px] text-[14px] leading-5 text-fy27-text-secondary [@media(orientation:landscape)]:hidden">
+        Turn your phone sideways to see shared content up to twice as large.
+      </p>
+    </div>
+  );
+}
 
 /**
  * Presenter slideshow share — Figma `996:37625` (Mobile Meeting Redesign).
@@ -63,6 +76,8 @@ export function SharedContentShare({
   onMaximize,
   onReflow,
   onZoomAttempt,
+  onSlideScaleComputed,
+  isContentLoading = false,
   showRotateHint = false,
   splitLayout = false,
   activeSlideIndex,
@@ -72,6 +87,8 @@ export function SharedContentShare({
   onMaximize?: () => void;
   onReflow?: () => void;
   onZoomAttempt?: () => void;
+  onSlideScaleComputed?: (index: number, scale: number) => void;
+  isContentLoading?: boolean;
   showRotateHint?: boolean;
   splitLayout?: boolean;
   activeSlideIndex?: number;
@@ -87,6 +104,15 @@ export function SharedContentShare({
     />
   );
 
+  const slideContent = (
+    <div className="relative w-full h-full" aria-busy={isContentLoading}>
+      <div className="w-full h-full" style={{ visibility: isContentLoading ? "hidden" : "visible" }}>
+        <OriginalSlideDeckStrip onZoomAttempt={onZoomAttempt} onSlideScaleComputed={onSlideScaleComputed} activeIndex={activeSlideIndex} onActiveIndexChange={onActiveSlideIndexChange} />
+      </div>
+      {isContentLoading && <div className="absolute inset-0"><SharedContentLoading /></div>}
+    </div>
+  );
+
   // Name-tag / fullscreen row.
   const nametagRow = (
     <div className="h-[52px] px-[8px] flex items-center gap-[10px]">
@@ -94,7 +120,7 @@ export function SharedContentShare({
         <span className="px-[2px] truncate text-fy27-text-primary text-[12px] leading-[16px]">{sharerName}&apos;s content</span>
       </div>
       <div className="flex-1" />
-      {showRotateHint && (
+      {showRotateHint && !isContentLoading && (
         <div
           role="img"
           aria-label="Tip: rotate your phone for a bigger view"
@@ -106,6 +132,7 @@ export function SharedContentShare({
       <button
         type="button"
         aria-label="Open easy read"
+        disabled={isContentLoading}
         onClick={onReflow}
         className="size-[52px] rounded-[8px] flex items-center justify-center shrink-0"
       >
@@ -114,6 +141,7 @@ export function SharedContentShare({
       <button
         type="button"
         aria-label="Open shared content fullscreen"
+        disabled={isContentLoading}
         onClick={onMaximize}
         className="size-[52px] rounded-[8px] flex items-center justify-center shrink-0"
       >
@@ -130,10 +158,10 @@ export function SharedContentShare({
     return (
       <div className="w-full h-full flex flex-col overflow-hidden" style={{ fontFamily: "var(--font-sf-pro)" }}>
         <div className="flex-1 min-h-0 overflow-hidden">
-          <OriginalSlideDeckStrip onZoomAttempt={onZoomAttempt} activeIndex={activeSlideIndex} onActiveIndexChange={onActiveSlideIndexChange} />
+          {slideContent}
         </div>
         {nametagRow}
-        {controlBar}
+        <div inert={isContentLoading ? true : undefined} className={isContentLoading ? "invisible" : undefined}>{controlBar}</div>
         <div className="h-[10px] shrink-0" />
       </div>
     );
@@ -143,11 +171,11 @@ export function SharedContentShare({
     <div className="w-full overflow-hidden rounded-[4px] bg-fy27-surface mb-[2px]" style={{ fontFamily: "var(--font-sf-pro)" }}>
       {/* Shared slide deck — original form, scrollable */}
       <div className="w-full h-[224px]">
-        <OriginalSlideDeckStrip onZoomAttempt={onZoomAttempt} activeIndex={activeSlideIndex} onActiveIndexChange={onActiveSlideIndexChange} />
+        {slideContent}
       </div>
 
       {nametagRow}
-      {controlBar}
+      <div inert={isContentLoading ? true : undefined} className={isContentLoading ? "invisible" : undefined}>{controlBar}</div>
     </div>
   );
 }

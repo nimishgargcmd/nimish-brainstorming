@@ -53,6 +53,11 @@ interface MorePanelProps {
   setInitialView?: (view: "main" | "participants") => void;
   isContentSharing?: boolean;
   onContentSharingToggle?: () => void;
+  /** Demo-only simulation of the presenter actively annotating the shared content —
+   *  stands in for a real "is presenter drawing/pointing" signal (brainstorming/
+   *  screensharing idea 1, condition 2). */
+  isPresenterAnnotating?: boolean;
+  onToggleAnnotationDemo?: () => void;
   /** FY27 MVP: gallery ↔ audio-only view toggle (the tile replaces "Apps" in the grid). */
   isAudioOnly?: boolean;
   onAudioOnlyToggle?: () => void;
@@ -182,6 +187,8 @@ export function MorePanel({
   setInitialView,
   isContentSharing = false,
   onContentSharingToggle,
+  isPresenterAnnotating = false,
+  onToggleAnnotationDemo,
   isAudioOnly = false,
   onAudioOnlyToggle,
   raisedHands = [],
@@ -387,7 +394,11 @@ export function MorePanel({
           {isFy27Mvp ? (
             <div className="flex flex-col">
               {/* Figma "Grouped List" — see node 1170:41628. No per-row dividers. */}
-              <MvpListRow icon={<HandDrawIcon size={20} />} label="Spatial annotations" onClick={noop} />
+              <MvpListRow
+                icon={<HandDrawIcon size={20} />}
+                label={isPresenterAnnotating ? "Spatial annotations (on — demo)" : "Spatial annotations"}
+                onClick={() => onToggleAnnotationDemo?.()}
+              />
               <MvpListRow
                 icon={<AppsIcon size={20} />}
                 label="Apps"
