@@ -44,6 +44,7 @@ interface CorrectionCandidate {
   ty: number;
   coverageX?: number;
   coverageY?: number;
+  reason?: string;
 }
 
 function candidatesDiffer(a: CorrectionCandidate, b: CorrectionCandidate): boolean {
@@ -93,7 +94,7 @@ function calculateFramingCandidate(
   const neutral = { scale: 1, tx: 0, ty: 0 };
   if (![faceLeft, faceTop, faceRight, faceBottom, sourceWidth, sourceHeight, tileWidth, tileHeight].every(Number.isFinite) ||
       Math.min(sourceWidth, sourceHeight, tileWidth, tileHeight) <= 0 ||
-      faceRight <= faceLeft || faceBottom <= faceTop) return neutral;
+      faceRight <= faceLeft || faceBottom <= faceTop) return { ...neutral, reason: "Invalid dimensions or detection" };
 
   const coverScale = Math.max(tileWidth / sourceWidth, tileHeight / sourceHeight);
   const coverageX = sourceWidth * coverScale / tileWidth;
@@ -110,7 +111,7 @@ function calculateFramingCandidate(
   const headBottom = centerY + faceHeight * (0.5 + HEAD_PADDING_BOTTOM);
 
   if (headLeft <= sourceLeft || headRight >= 1 - sourceLeft ||
-      headTop <= sourceTop || headBottom >= 1 - sourceTop) return neutral;
+      headTop <= sourceTop || headBottom >= 1 - sourceTop) return { ...neutral, reason: "Estimated head outside camera image" };
 
   const minScale = Math.max(
     MIN_SCALE,
@@ -124,7 +125,7 @@ function calculateFramingCandidate(
     (1 - 2 * TILE_MARGIN_SIDE) / (headRight - headLeft),
     (1 - TILE_MARGIN_TOP - TILE_MARGIN_BOTTOM) / (headBottom - headTop),
   );
-  if (minScale > maxScale) return neutral;
+  if (minScale > maxScale) return { ...neutral, reason: `Head margins cannot fit (${minScale.toFixed(2)} > ${maxScale.toFixed(2)})` };
 
   const scale = Math.max(minScale, Math.min(maxScale, TARGET_FACE_HEIGHT / faceHeight));
   const maxOffsetX = (coverageX - 1 / scale) / 2;
@@ -158,9 +159,12 @@ export interface FaceFramingResult {
   correctiveObjectPosition: string;
   /** True while the computed correction is non-trivial (drives the "AI enhanced" badge). */
   isCorrecting: boolean;
+  diagnostic: string | null;
 }
 
 export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolean): FaceFramingResult {
+  const [debugEnabled] = useState(() => new URLSearchParams(window.location.search).get("framingDebug") === "1");
+  const [diagnostic, setDiagnostic] = useState<string | null>(debugEnabled ? "Loading face detector" : null);
   const modelRef = useRef<blazeface.BlazeFaceModel | null>(null);
   const [isModelReady, setIsModelReady] = useState(false);
   const [correctiveTransform, setCorrectiveTransform] = useState<string | undefined>(undefined);
@@ -177,8 +181,10 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
         if (!cancelled) {
           modelRef.current = model;
           setIsModelReady(true);
+          if (debugEnabled) setDiagnostic(`Model ready (${tf.getBackend()}); waiting for camera`);
         }
-      } catch {
+      } catch (error) {
+        if (!cancelled && debugEnabled) setDiagnostic(`Model failed: ${String(error).slice(0, 180)}`);
         // No WebGL/WASM backend available, or model failed to load — auto-framing
         // just won't correct anything; the raw feed still shows normally.
       }
@@ -186,7 +192,7 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [debugEnabled]);
 
   useEffect(() => {
     if (!enabled || !videoEl || !isModelReady) {
@@ -203,11 +209,17 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
     let applied: CorrectionCandidate | null = null;
     let pending: { candidate: CorrectionCandidate; since: number } | null = null;
     let missTicks = 0;
+    const report = (message: string) => {
+      if (debugEnabled) setDiagnostic(`${tf.getBackend()} | camera ${videoEl.videoWidth}x${videoEl.videoHeight} | tile ${videoEl.clientWidth}x${videoEl.clientHeight}\n${message}`);
+    };
 
     const interval = setInterval(() => {
       if (inFlight) return;
       const model = modelRef.current;
-      if (!model || videoEl.readyState < 2 || videoEl.videoWidth === 0) return;
+      if (!model || videoEl.readyState < 2 || videoEl.videoWidth === 0) {
+        report(`Waiting for video frames (readyState ${videoEl.readyState})`);
+        return;
+      }
       inFlight = true;
       model
         .estimateFaces(videoEl, false)
@@ -216,6 +228,7 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
 
           if (!predictions.length) {
             missTicks += 1;
+            report(`No face detected (${missTicks} samples)`);
             if (missTicks > MISS_GRACE_TICKS) {
               applied = null;
               pending = null;
@@ -239,6 +252,7 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
             videoEl.videoWidth, videoEl.videoHeight,
             videoEl.clientWidth, videoEl.clientHeight,
           );
+          const details = `Face ${[x1, y1, x2, y2].map(Math.round).join(", ")}\n${candidate.reason ?? `Target zoom ${candidate.scale.toFixed(2)}, shift ${(candidate.tx * 100).toFixed(1)}%, ${(candidate.ty * 100).toFixed(1)}%`}`;
 
           if (!applied) {
             applied = candidate;
@@ -246,12 +260,14 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
             setCorrectiveTransform(candidateToTransform(applied));
             setCorrectiveObjectPosition(candidateToObjectPosition(applied));
             setIsCorrecting(isCandidateMeaningful(applied));
+            report(`Applied\n${details}`);
             return;
           }
 
           if (!candidatesDiffer(candidate, applied)) {
             // Still within the dead-zone of what's already applied — hold steady.
             pending = null;
+            report(`Holding\n${details}`);
             return;
           }
 
@@ -264,13 +280,18 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
               setCorrectiveTransform(candidateToTransform(applied));
               setCorrectiveObjectPosition(candidateToObjectPosition(applied));
               setIsCorrecting(isCandidateMeaningful(applied));
+              report(`Readjusting\n${details}`);
+            } else {
+              report(`Waiting for stable position (${now - pending.since}/${COMMIT_DEBOUNCE_MS}ms)\n${details}`);
             }
           } else {
             // A new distinct change just appeared — start its debounce timer.
             pending = { candidate, since: now };
+            report(`New position; waiting ${COMMIT_DEBOUNCE_MS}ms\n${details}`);
           }
         })
-        .catch(() => {
+        .catch((error) => {
+          if (!cancelled) report(`Detection failed: ${String(error).slice(0, 180)}`);
           // Transient detection error (e.g. frame not ready) — ignore, try again next tick.
         })
         .finally(() => {
@@ -282,8 +303,8 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
       cancelled = true;
       clearInterval(interval);
     };
-  }, [enabled, videoEl, isModelReady]);
+  }, [enabled, videoEl, isModelReady, debugEnabled]);
 
-  return { isModelReady, correctiveTransform, correctiveObjectPosition, isCorrecting };
+  return { isModelReady, correctiveTransform, correctiveObjectPosition, isCorrecting, diagnostic };
 }
 

@@ -539,6 +539,16 @@ export function PreJoinPage() {
               </div>
             )}
 
+            {faceFraming.diagnostic !== null && (
+              <output
+                aria-label="Framing diagnostics"
+                className="absolute left-[12px] right-[48px] top-[90px] z-20 rounded-[4px] px-[8px] py-[6px] text-[11px] leading-[15px] whitespace-pre-wrap break-words pointer-events-none text-white bg-black/80"
+              >
+                {!autoEnhanceOn ? "Auto-enhance off\n" : !hasLiveStream ? "No active camera stream\n" : ""}
+                {faceFraming.diagnostic}
+              </output>
+            )}
+
             {/* Top gradient overlay */}
             <div className="absolute top-0 left-0 w-full z-10 bg-gradient-to-b from-black/50 to-transparent pt-[12px]">
               {topBarContent}
