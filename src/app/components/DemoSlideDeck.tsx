@@ -21,9 +21,6 @@ import slideImg6 from "@/assets/figma/shared-content/Screenshot 2026-09-16 23591
 // Cropped to just the non-text graphics (diagrams, photos, trend lines) — the parts of these
 // slides that can't be reflowed as text. Split into one image per distinct item (each chart,
 // each photo) rather than one combined strip, so every item stays legible when placed 1-by-1.
-import slide1TimelinePart1 from "@/assets/figma/shared-content/slide1-timeline-part1.png";
-import slide1TimelinePart2 from "@/assets/figma/shared-content/slide1-timeline-part2.png";
-import slide1TimelinePart3 from "@/assets/figma/shared-content/slide1-timeline-part3.png";
 import slide2DevicesGraphic from "@/assets/figma/shared-content/slide2-devices-graphic.png";
 import slide3ChartLeft from "@/assets/figma/shared-content/slide3-chart-left.png";
 import slide3ChartRight from "@/assets/figma/shared-content/slide3-chart-right.png";
@@ -78,7 +75,6 @@ export const DEMO_SLIDES: Slide[] = [
     title: "Rollout Timeline & Change management plan",
     subtitle: "Each phase is gated \u2014 requires zero Sev1/Sev2 and validated core workflows before proceeding",
     image: slideImg1,
-    graphicImages: [{ src: slide1TimelinePart1 }, { src: slide1TimelinePart2 }, { src: slide1TimelinePart3 }],
     items: [
       { title: "Pre-Rollout \u2014 Jan 2026", description: "MC announcement, Docs published", status: "done" },
       { title: "MSD \u2014 Mar 2026", description: "Weekly MSD calls", status: "done" },
