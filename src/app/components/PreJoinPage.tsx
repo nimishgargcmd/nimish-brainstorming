@@ -134,8 +134,11 @@ export function PreJoinPage() {
   const enhanceIntroAnimationRef = useRef<Animation | null>(null);
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
 
+  const { stream: cameraStream, cameraError, acquireCamera, setTrackEnabled, attachVideo, flipCamera } = useCamera();
+  const hasLiveStream = isVideoOn && !!cameraStream && !cameraError;
+
   useEffect(() => {
-    if (!enhanceIntroPending || !isVideoOn) return;
+    if (!enhanceIntroPending || !hasLiveStream) return;
     const timer = setTimeout(() => {
       setAutoEnhanceOn(true);
       setEnhanceIntroPending(false);
@@ -144,21 +147,20 @@ export function PreJoinPage() {
       if (button && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
         enhanceIntroAnimationRef.current = button.animate([
           { transform: "scale(1)", backgroundColor: "rgba(255,255,255,0.16)" },
-          { transform: "scale(1.2)", offset: 0.5 },
+          { transform: "scale(1.2)", offset: 0.2 },
+          { transform: "scale(1)", offset: 0.4 },
+          { transform: "scale(1.2)", offset: 0.6 },
+          { transform: "scale(1)", offset: 0.8 },
           { transform: "scale(1)", backgroundColor: getComputedStyle(button).getPropertyValue("--fy27-brand-primary").trim() },
-        ], { duration: 650, easing: "ease-in-out" });
+        ], { duration: 5000, easing: "ease-in-out" });
       }
     }, 700);
     return () => clearTimeout(timer);
-  }, [enhanceIntroPending, isVideoOn]);
+  }, [enhanceIntroPending, hasLiveStream]);
 
   useEffect(() => () => enhanceIntroAnimationRef.current?.cancel(), []);
 
-  // Shared camera context — single stream for the whole app
-  const { stream: cameraStream, cameraError, acquireCamera, setTrackEnabled, attachVideo, flipCamera } = useCamera();
-
   // Real-time detection drives all three corrections (only meaningful once a live stream exists).
-  const hasLiveStream = isVideoOn && !!cameraStream && !cameraError;
   const faceFraming = useFaceFraming(videoEl, hasLiveStream, autoEnhanceOn);
   const lightingQuality = useLightingQualityAnalysis(videoEl, hasLiveStream, autoEnhanceOn, !faceFraming.isFramingPaused);
 
