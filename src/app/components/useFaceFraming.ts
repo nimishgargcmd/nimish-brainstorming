@@ -42,6 +42,8 @@ interface CorrectionCandidate {
   scale: number;
   tx: number; // fraction, not yet a percent string
   ty: number;
+  coverageX?: number;
+  coverageY?: number;
 }
 
 function candidatesDiffer(a: CorrectionCandidate, b: CorrectionCandidate): boolean {
@@ -54,16 +56,28 @@ function candidatesDiffer(a: CorrectionCandidate, b: CorrectionCandidate): boole
 
 function constrainCandidate(candidate: CorrectionCandidate): CorrectionCandidate {
   const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, candidate.scale));
-  const maxOffset = (1 - 1 / scale) / 2;
+  const maxOffsetX = ((candidate.coverageX ?? 1) - 1 / scale) / 2;
+  const maxOffsetY = ((candidate.coverageY ?? 1) - 1 / scale) / 2;
   return {
+    ...candidate,
     scale,
-    tx: Math.max(-maxOffset, Math.min(maxOffset, candidate.tx)),
-    ty: Math.max(-maxOffset, Math.min(maxOffset, candidate.ty)),
+    tx: Math.max(-maxOffsetX, Math.min(maxOffsetX, candidate.tx)),
+    ty: Math.max(-maxOffsetY, Math.min(maxOffsetY, candidate.ty)),
   };
 }
 
 function candidateToTransform(candidate: CorrectionCandidate): string {
-  return `scaleX(-1) scale(${candidate.scale}) translate(${candidate.tx * 100}%, ${candidate.ty * 100}%)`;
+  const bounded = constrainCandidate({ scale: candidate.scale, tx: candidate.tx, ty: candidate.ty });
+  return `scaleX(-1) scale(${bounded.scale}) translate(${bounded.tx * 100}%, ${bounded.ty * 100}%)`;
+}
+
+function candidateToObjectPosition(candidate: CorrectionCandidate): string {
+  const bounded = constrainCandidate({ scale: candidate.scale, tx: candidate.tx, ty: candidate.ty });
+  const extraWidth = (candidate.coverageX ?? 1) - 1;
+  const extraHeight = (candidate.coverageY ?? 1) - 1;
+  const horizontal = extraWidth > 0 ? 50 - (candidate.tx - bounded.tx) / extraWidth * 100 : 50;
+  const vertical = extraHeight > 0 ? 50 - (candidate.ty - bounded.ty) / extraHeight * 100 : 50;
+  return `${Math.max(0, Math.min(100, horizontal))}% ${Math.max(0, Math.min(100, vertical))}%`;
 }
 
 function calculateFramingCandidate(
@@ -82,6 +96,10 @@ function calculateFramingCandidate(
       faceRight <= faceLeft || faceBottom <= faceTop) return neutral;
 
   const coverScale = Math.max(tileWidth / sourceWidth, tileHeight / sourceHeight);
+  const coverageX = sourceWidth * coverScale / tileWidth;
+  const coverageY = sourceHeight * coverScale / tileHeight;
+  const sourceLeft = (1 - coverageX) / 2;
+  const sourceTop = (1 - coverageY) / 2;
   const faceWidth = (faceRight - faceLeft) * coverScale / tileWidth;
   const faceHeight = (faceBottom - faceTop) * coverScale / tileHeight;
   const centerX = 0.5 + ((faceLeft + faceRight) / 2 - sourceWidth / 2) * coverScale / tileWidth;
@@ -91,14 +109,15 @@ function calculateFramingCandidate(
   const headTop = centerY - faceHeight * (0.5 + HEAD_PADDING_TOP);
   const headBottom = centerY + faceHeight * (0.5 + HEAD_PADDING_BOTTOM);
 
-  if (headLeft <= 0 || headRight >= 1 || headTop <= 0 || headBottom >= 1) return neutral;
+  if (headLeft <= sourceLeft || headRight >= 1 - sourceLeft ||
+      headTop <= sourceTop || headBottom >= 1 - sourceTop) return neutral;
 
   const minScale = Math.max(
     MIN_SCALE,
-    TILE_MARGIN_SIDE / headLeft,
-    TILE_MARGIN_SIDE / (1 - headRight),
-    TILE_MARGIN_TOP / headTop,
-    TILE_MARGIN_BOTTOM / (1 - headBottom),
+    TILE_MARGIN_SIDE / (headLeft - sourceLeft),
+    TILE_MARGIN_SIDE / (1 - sourceLeft - headRight),
+    TILE_MARGIN_TOP / (headTop - sourceTop),
+    TILE_MARGIN_BOTTOM / (1 - sourceTop - headBottom),
   );
   const maxScale = Math.min(
     MAX_SCALE,
@@ -108,13 +127,16 @@ function calculateFramingCandidate(
   if (minScale > maxScale) return neutral;
 
   const scale = Math.max(minScale, Math.min(maxScale, TARGET_FACE_HEIGHT / faceHeight));
-  const maxOffset = (1 - 1 / scale) / 2;
-  const minTx = Math.max(-maxOffset, (TILE_MARGIN_SIDE - 0.5) / scale - (headLeft - 0.5));
-  const maxTx = Math.min(maxOffset, (0.5 - TILE_MARGIN_SIDE) / scale - (headRight - 0.5));
-  const minTy = Math.max(-maxOffset, (TILE_MARGIN_TOP - 0.5) / scale - (headTop - 0.5));
-  const maxTy = Math.min(maxOffset, (0.5 - TILE_MARGIN_BOTTOM) / scale - (headBottom - 0.5));
+  const maxOffsetX = (coverageX - 1 / scale) / 2;
+  const maxOffsetY = (coverageY - 1 / scale) / 2;
+  const minTx = Math.max(-maxOffsetX, (TILE_MARGIN_SIDE - 0.5) / scale - (headLeft - 0.5));
+  const maxTx = Math.min(maxOffsetX, (0.5 - TILE_MARGIN_SIDE) / scale - (headRight - 0.5));
+  const minTy = Math.max(-maxOffsetY, (TILE_MARGIN_TOP - 0.5) / scale - (headTop - 0.5));
+  const maxTy = Math.min(maxOffsetY, (0.5 - TILE_MARGIN_BOTTOM) / scale - (headBottom - 0.5));
   return constrainCandidate({
     scale,
+    coverageX,
+    coverageY,
     tx: Math.max(minTx, Math.min(maxTx, (0.5 - TARGET_CENTER_X) / scale - (centerX - 0.5))),
     ty: Math.max(minTy, Math.min(maxTy, (TARGET_CENTER_Y - 0.5) / scale - (centerY - 0.5))),
   });
@@ -133,6 +155,7 @@ export interface FaceFramingResult {
   isModelReady: boolean;
   /** Mirrored CSS transform that recenters/rescales the detected face; undefined when no face is detected or no correction is needed. */
   correctiveTransform: string | undefined;
+  correctiveObjectPosition: string;
   /** True while the computed correction is non-trivial (drives the "AI enhanced" badge). */
   isCorrecting: boolean;
 }
@@ -141,6 +164,7 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
   const modelRef = useRef<blazeface.BlazeFaceModel | null>(null);
   const [isModelReady, setIsModelReady] = useState(false);
   const [correctiveTransform, setCorrectiveTransform] = useState<string | undefined>(undefined);
+  const [correctiveObjectPosition, setCorrectiveObjectPosition] = useState("50% 50%");
   const [isCorrecting, setIsCorrecting] = useState(false);
 
   // Load the model once, lazily, regardless of `enabled` (so it's ready by the time it's needed).
@@ -167,6 +191,7 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
   useEffect(() => {
     if (!enabled || !videoEl || !isModelReady) {
       setCorrectiveTransform(undefined);
+      setCorrectiveObjectPosition("50% 50%");
       setIsCorrecting(false);
       return;
     }
@@ -195,6 +220,7 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
               applied = null;
               pending = null;
               setCorrectiveTransform(undefined);
+              setCorrectiveObjectPosition("50% 50%");
               setIsCorrecting(false);
             }
             // Within the grace period: keep showing whatever's currently applied.
@@ -218,6 +244,7 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
             applied = candidate;
             pending = null;
             setCorrectiveTransform(candidateToTransform(applied));
+            setCorrectiveObjectPosition(candidateToObjectPosition(applied));
             setIsCorrecting(isCandidateMeaningful(applied));
             return;
           }
@@ -235,6 +262,7 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
               applied = candidate;
               pending = null;
               setCorrectiveTransform(candidateToTransform(applied));
+              setCorrectiveObjectPosition(candidateToObjectPosition(applied));
               setIsCorrecting(isCandidateMeaningful(applied));
             }
           } else {
@@ -256,6 +284,6 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
     };
   }, [enabled, videoEl, isModelReady]);
 
-  return { isModelReady, correctiveTransform, isCorrecting };
+  return { isModelReady, correctiveTransform, correctiveObjectPosition, isCorrecting };
 }
 

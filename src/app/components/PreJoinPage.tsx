@@ -288,7 +288,7 @@ export function PreJoinPage() {
   const selfVideoTransform = autoEnhanceOn && faceFraming.correctiveTransform ? faceFraming.correctiveTransform : "scaleX(-1)";
   const selfVideoObjectFit: "cover" | "contain" = "cover";
   // Slow, gentle glide for auto-framing/enhance corrections — a fast snap reads as jumpy.
-  const selfVideoStyle = { filter: selfVideoFilter, transform: selfVideoTransform, objectFit: selfVideoObjectFit, transition: "filter 400ms ease, transform 2200ms cubic-bezier(0.22, 1, 0.36, 1)" };
+  const selfVideoStyle = { filter: selfVideoFilter, transform: selfVideoTransform, objectFit: selfVideoObjectFit, objectPosition: autoEnhanceOn ? faceFraming.correctiveObjectPosition : "50% 50%", transition: "filter 400ms ease, transform 2200ms cubic-bezier(0.22, 1, 0.36, 1), object-position 2200ms cubic-bezier(0.22, 1, 0.36, 1)" };
 
   const topBarContent = (
     <div className="flex items-start justify-between px-[16px] w-full">
