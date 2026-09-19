@@ -152,6 +152,72 @@ function isCandidateMeaningful(c: CorrectionCandidate): boolean {
   );
 }
 
+type FaceVisibility = "partial" | "full" | "unknown";
+
+interface FaceVisibilityState {
+  paused: boolean;
+  showCue: boolean;
+  partialSince: number | null;
+  fullSince: number | null;
+  lastEvidenceAt: number;
+  lastSampleAt: number;
+}
+
+function initialFaceVisibility(): FaceVisibilityState {
+  return { paused: false, showCue: false, partialSince: null, fullSince: null, lastEvidenceAt: 0, lastSampleAt: 0 };
+}
+
+function classifyFaceVisibility(
+  bounds: number[], landmarks: unknown, confidence: number, width: number, height: number,
+): FaceVisibility {
+  if (!Number.isFinite(confidence) || confidence < 0.9 ||
+      ![...bounds, width, height].every(Number.isFinite) || bounds.length !== 4 || width <= 0 || height <= 0 ||
+      !Array.isArray(landmarks) || landmarks.length < 4) return "unknown";
+  const core = landmarks.slice(0, 4);
+  if (!core.every(point => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite))) return "unknown";
+  const [left, top, right, bottom] = bounds;
+  const faceWidth = right - left;
+  const faceHeight = bottom - top;
+  if (faceWidth <= 0 || faceHeight <= 0) return "unknown";
+  const crossesLeft = left < -faceWidth * 0.02 && core.some(point => point[0] <= width * 0.02);
+  const crossesRight = right > width + faceWidth * 0.02 && core.some(point => point[0] >= width * 0.98);
+  const crossesTop = top < -faceHeight * 0.02 && core.some(point => point[1] <= height * 0.02);
+  const crossesBottom = bottom > height + faceHeight * 0.02 && core.some(point => point[1] >= height * 0.98);
+  if (crossesLeft || crossesRight || crossesTop || crossesBottom) return "partial";
+  if (left > faceWidth * 0.02 && right < width - faceWidth * 0.02 &&
+      top > faceHeight * 0.02 && bottom < height - faceHeight * 0.02 &&
+      core.every(point => point[0] > 0 && point[0] < width && point[1] > 0 && point[1] < height)) return "full";
+  return "unknown";
+}
+
+function advanceFaceVisibility(state: FaceVisibilityState, evidence: FaceVisibility, now: number): FaceVisibilityState {
+  const next = { ...state, lastSampleAt: now };
+  if (now - state.lastSampleAt > 750) {
+    next.partialSince = null;
+    next.fullSince = null;
+  }
+  if (evidence === "partial") {
+    next.paused = true;
+    next.fullSince = null;
+    next.partialSince ??= now;
+    next.lastEvidenceAt = now;
+    next.showCue = state.showCue || now - next.partialSince >= 1000;
+  } else if (evidence === "full") {
+    next.partialSince = null;
+    next.lastEvidenceAt = now;
+    next.fullSince ??= now;
+    if (now - next.fullSince >= 750) {
+      next.paused = false;
+      next.showCue = false;
+    }
+  } else {
+    next.partialSince = null;
+    next.fullSince = null;
+    if (now - state.lastEvidenceAt >= 2000) next.showCue = false;
+  }
+  return next;
+}
+
 export interface FaceFramingResult {
   /** True once BlazeFace has finished loading and detection can run. */
   isModelReady: boolean;
@@ -160,6 +226,8 @@ export interface FaceFramingResult {
   correctiveObjectPosition: string;
   /** True while the computed correction is non-trivial (drives the "AI enhanced" badge). */
   isCorrecting: boolean;
+  isFramingPaused: boolean;
+  showPartialFaceCue: boolean;
   diagnostic: string | null;
 }
 
@@ -171,6 +239,8 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
   const [correctiveTransform, setCorrectiveTransform] = useState<string | undefined>(undefined);
   const [correctiveObjectPosition, setCorrectiveObjectPosition] = useState("50% 50%");
   const [isCorrecting, setIsCorrecting] = useState(false);
+  const [isFramingPaused, setIsFramingPaused] = useState(false);
+  const [showPartialFaceCue, setShowPartialFaceCue] = useState(false);
 
   // Load the model once, lazily, regardless of `enabled` (so it's ready by the time it's needed).
   useEffect(() => {
@@ -200,6 +270,8 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
       setCorrectiveTransform(undefined);
       setCorrectiveObjectPosition("50% 50%");
       setIsCorrecting(false);
+      setIsFramingPaused(false);
+      setShowPartialFaceCue(false);
       return;
     }
 
@@ -210,6 +282,27 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
     let applied: CorrectionCandidate | null = null;
     let pending: { candidate: CorrectionCandidate; since: number } | null = null;
     let missTicks = 0;
+    let visibility = initialFaceVisibility();
+    const observeVisibility = (evidence: FaceVisibility) => {
+      const next = advanceFaceVisibility(visibility, evidence, performance.now());
+      if (next.paused && !visibility.paused) {
+        const currentStyle = getComputedStyle(videoEl);
+        const currentTransform = new DOMMatrixReadOnly(currentStyle.transform);
+        setCorrectiveTransform(candidateToTransform({
+          scale: currentTransform.d,
+          tx: -currentTransform.e / currentTransform.d / Math.max(1, videoEl.clientWidth),
+          ty: currentTransform.f / currentTransform.d / Math.max(1, videoEl.clientHeight),
+        }));
+        setCorrectiveObjectPosition(currentStyle.objectPosition);
+        setIsCorrecting(false);
+      }
+      if (next.paused || visibility.paused) pending = null;
+      if (!next.paused && visibility.paused) applied = null;
+      visibility = next;
+      setIsFramingPaused(next.paused);
+      setShowPartialFaceCue(next.showCue);
+      return next.paused;
+    };
     const report = (message: string) => {
       if (debugEnabled) setDiagnostic(`${tf.getBackend()} | camera ${videoEl.videoWidth}x${videoEl.videoHeight} | tile ${videoEl.clientWidth}x${videoEl.clientHeight}\n${message}`);
     };
@@ -218,6 +311,7 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
       if (inFlight) return;
       const model = modelRef.current;
       if (!model || videoEl.readyState < 2 || videoEl.videoWidth === 0) {
+        observeVisibility("unknown");
         report(`Waiting for video frames (readyState ${videoEl.readyState})`);
         return;
       }
@@ -228,9 +322,10 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
           if (cancelled) return;
 
           if (!predictions.length) {
+            const paused = observeVisibility("unknown");
             missTicks += 1;
             report(`No face detected (${missTicks} samples)`);
-            if (missTicks > MISS_GRACE_TICKS) {
+            if (!paused && missTicks > MISS_GRACE_TICKS) {
               applied = null;
               pending = null;
               setCorrectiveTransform(undefined);
@@ -248,6 +343,14 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
           );
           const [x1, y1] = face.topLeft as [number, number];
           const [x2, y2] = face.bottomRight as [number, number];
+          const evidence = classifyFaceVisibility(
+            [x1, y1, x2, y2], face.landmarks, face.probability?.[0] ?? 0,
+            videoEl.videoWidth, videoEl.videoHeight,
+          );
+          if (observeVisibility(evidence)) {
+            report(`Framing paused (${evidence}); ${visibility.showCue ? "Move fully into view" : "confirming visibility"}\nFace ${[x1, y1, x2, y2].map(Math.round).join(", ")}`);
+            return;
+          }
           const candidate = calculateFramingCandidate(
             x1, y1, x2, y2,
             videoEl.videoWidth, videoEl.videoHeight,
@@ -292,7 +395,10 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
           }
         })
         .catch((error) => {
-          if (!cancelled) report(`Detection failed: ${String(error).slice(0, 180)}`);
+          if (!cancelled) {
+            observeVisibility("unknown");
+            report(`Detection failed: ${String(error).slice(0, 180)}`);
+          }
           // Transient detection error (e.g. frame not ready) — ignore, try again next tick.
         })
         .finally(() => {
@@ -306,6 +412,6 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
     };
   }, [enabled, videoEl, isModelReady, debugEnabled]);
 
-  return { isModelReady, correctiveTransform, correctiveObjectPosition, isCorrecting, diagnostic };
+  return { isModelReady, correctiveTransform, correctiveObjectPosition, isCorrecting, isFramingPaused, showPartialFaceCue, diagnostic };
 }
 

@@ -288,7 +288,7 @@ export function PreJoinPage() {
   const selfVideoTransform = autoEnhanceOn && faceFraming.correctiveTransform ? faceFraming.correctiveTransform : "scaleX(-1)";
   const selfVideoObjectFit: "cover" | "contain" = "cover";
   // Slow, gentle glide for auto-framing/enhance corrections — a fast snap reads as jumpy.
-  const selfVideoStyle = { filter: selfVideoFilter, transform: selfVideoTransform, objectFit: selfVideoObjectFit, objectPosition: autoEnhanceOn ? faceFraming.correctiveObjectPosition : "50% 50%", transition: "filter 400ms ease, transform 2200ms cubic-bezier(0.22, 1, 0.36, 1), object-position 2200ms cubic-bezier(0.22, 1, 0.36, 1)" };
+  const selfVideoStyle = { filter: selfVideoFilter, transform: selfVideoTransform, objectFit: selfVideoObjectFit, objectPosition: autoEnhanceOn ? faceFraming.correctiveObjectPosition : "50% 50%", transition: faceFraming.isFramingPaused ? "filter 400ms ease" : "filter 400ms ease, transform 2200ms cubic-bezier(0.22, 1, 0.36, 1), object-position 2200ms cubic-bezier(0.22, 1, 0.36, 1)" };
 
   const topBarContent = (
     <div className="flex items-start justify-between px-[16px] w-full">
@@ -519,6 +519,7 @@ export function PreJoinPage() {
                 aria-hidden
                 className="animate-ai-sweep absolute inset-0 z-[15] pointer-events-none"
                 style={{
+                  visibility: faceFraming.isFramingPaused ? "hidden" : "visible",
                   backgroundImage:
                     "linear-gradient(100deg, rgba(255,255,255,0) 35%, rgba(255,255,255,0.55) 48%, rgba(168,152,250,0.6) 50%, rgba(255,255,255,0.55) 52%, rgba(255,255,255,0) 65%)",
                   backgroundSize: "300% 100%",
@@ -527,7 +528,7 @@ export function PreJoinPage() {
             )}
 
             {/* Auto-enhance badge — flashes for 1s like a toast, then dismisses itself */}
-            {isVideoOn && isBadgeVisible && (
+            {isVideoOn && isBadgeVisible && !faceFraming.isFramingPaused && (
               <div
                 className="absolute left-1/2 -translate-x-1/2 z-20 flex items-center gap-[4px] px-[10px] py-[4px] rounded-full"
                 style={{ top: "52px", backgroundColor: "rgba(0,0,0,0.55)" }}
@@ -538,6 +539,19 @@ export function PreJoinPage() {
                 </span>
               </div>
             )}
+
+            <div
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              className="absolute left-[12px] right-[56px] top-[52px] z-20 flex justify-center pointer-events-none"
+            >
+              {hasLiveStream && autoEnhanceOn && faceFraming.showPartialFaceCue && (
+                <span className="rounded-[4px] bg-black/70 px-[10px] py-[6px] text-[12px] leading-[16px] text-center text-fy27-text-global">
+                  Move fully into view
+                </span>
+              )}
+            </div>
 
             {faceFraming.diagnostic !== null && (
               <output
