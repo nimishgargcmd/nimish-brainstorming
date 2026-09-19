@@ -54,13 +54,20 @@ export interface CardItem {
   tone?: "positive" | "caution";
 }
 
+export interface SlideGraphic {
+  src: string;
+  /** Which item this graphic is (e.g. the chart series or table row it illustrates) \u2014
+   *  reused verbatim from the slide's own data so a chart is never shown headless. */
+  caption?: string;
+}
+
 export type Slide =
-  | { kind: "bullets"; title: string; subtitle: string; image: string; bullets: string[]; graphicImages?: string[]; titleColor?: string }
-  | { kind: "chart"; title: string; subtitle: string; image: string; chart: ChartData; insight?: string; graphicImages?: string[]; titleColor?: string }
-  | { kind: "table"; title: string; subtitle: string; image: string; table: TableData; graphicImages?: string[]; titleColor?: string }
-  | { kind: "code"; title: string; subtitle: string; image: string; code: string[]; caption: string; graphicImages?: string[]; titleColor?: string }
-  | { kind: "ladder"; title: string; subtitle: string; image: string; items: LadderItem[]; graphicImages?: string[]; titleColor?: string }
-  | { kind: "cards"; title: string; subtitle: string; image: string; cards: CardItem[]; graphicImages?: string[]; titleColor?: string };
+  | { kind: "bullets"; title: string; subtitle: string; image: string; bullets: string[]; graphicImages?: SlideGraphic[]; titleColor?: string }
+  | { kind: "chart"; title: string; subtitle: string; image: string; chart: ChartData; insight?: string; graphicImages?: SlideGraphic[]; titleColor?: string }
+  | { kind: "table"; title: string; subtitle: string; image: string; table: TableData; graphicImages?: SlideGraphic[]; titleColor?: string }
+  | { kind: "code"; title: string; subtitle: string; image: string; code: string[]; caption: string; graphicImages?: SlideGraphic[]; titleColor?: string }
+  | { kind: "ladder"; title: string; subtitle: string; image: string; items: LadderItem[]; graphicImages?: SlideGraphic[]; titleColor?: string }
+  | { kind: "cards"; title: string; subtitle: string; image: string; cards: CardItem[]; graphicImages?: SlideGraphic[]; titleColor?: string };
 
 export const DEMO_SLIDES: Slide[] = [
   {
@@ -68,7 +75,7 @@ export const DEMO_SLIDES: Slide[] = [
     title: "Rollout Timeline & Change management plan",
     subtitle: "Each phase is gated \u2014 requires zero Sev1/Sev2 and validated core workflows before proceeding",
     image: slideImg1,
-    graphicImages: [slide1TimelinePart1, slide1TimelinePart2, slide1TimelinePart3],
+    graphicImages: [{ src: slide1TimelinePart1 }, { src: slide1TimelinePart2 }, { src: slide1TimelinePart3 }],
     items: [
       { title: "Pre-Rollout \u2014 Jan 2026", description: "MC announcement, Docs published" },
       { title: "MSD \u2014 Mar 2026", description: "Weekly MSD calls" },
@@ -86,7 +93,7 @@ export const DEMO_SLIDES: Slide[] = [
     title: "Converged administration in PMP",
     subtitle: "Unified management of Teams devices in a single portal (PMP)",
     image: slideImg2,
-    graphicImages: [slide2DevicesGraphic],
+    graphicImages: [{ src: slide2DevicesGraphic }],
     bullets: [
       "Delivering a unified admin experience.",
       "PMP \u2013 one single pane of glass for all device management",
@@ -99,7 +106,10 @@ export const DEMO_SLIDES: Slide[] = [
     title: "PMP Adoption",
     subtitle: "Managed tenants and devices (excluding Teams windows devices and SIP) in PMP compared to TAC.",
     image: slideImg3,
-    graphicImages: [slide3ChartLeft, slide3ChartRight],
+    graphicImages: [
+      { src: slide3ChartLeft, caption: "Tenants (Public cloud)" },
+      { src: slide3ChartRight, caption: "Devices (MTR-A, Panels, Teams Phones)" },
+    ],
     table: {
       headers: ["Metric", "Value", "Note"],
       rows: [
@@ -119,7 +129,11 @@ export const DEMO_SLIDES: Slide[] = [
     title: "Device type migration progress",
     subtitle: "Combined across NOAM \u00b7 EMEA \u00b7 APAC",
     image: slideImg4,
-    graphicImages: [slide4ChartMtra, slide4ChartPanels, slide4ChartPhones],
+    graphicImages: [
+      { src: slide4ChartMtra, caption: "MTR-A (Collab Bar + Touch Console)" },
+      { src: slide4ChartPanels, caption: "Panels" },
+      { src: slide4ChartPhones, caption: "Phones" },
+    ],
     chart: {
       title: "PMP Connected of TAC online",
       bars: [
@@ -134,7 +148,7 @@ export const DEMO_SLIDES: Slide[] = [
     title: "Customer Feedback Snapshot",
     subtitle: "Overall sentiment \u2014 Customers strongly validate PMP's unified Windows and Android management experience, noting that it addresses TAC feedback and adds valuable settings and update capabilities, while initial friction centers on Admin Agent readiness, URL allowlisting, OEM consistency, and rollout predictability.",
     image: slideImg5,
-    titleColor: "#5b5fc7",
+    titleColor: "#5E54E4",
     cards: [
       { title: "Unified PMP experience", description: "Customers see value in one portal for device management, with parity across Windows and Android experiences being appreciated.", tone: "positive" },
       { title: "Settings management", description: "Customers appreciate one settings template across device types; two-way sync in PMP also closes a current TAC gap for Android settings visibility.", tone: "positive" },
@@ -150,8 +164,8 @@ export const DEMO_SLIDES: Slide[] = [
     title: "Hybrid Work & Product Led Growth",
     subtitle: "Microsoft Teams Shared Space license - $104M",
     image: slideImg6,
-    graphicImages: [slide6PhotoLeft, slide6PhotoRight],
-    titleColor: "#5b5fc7",
+    graphicImages: [{ src: slide6PhotoLeft }, { src: slide6PhotoRight }],
+    titleColor: "#5E54E4",
     bullets: [
       "Hybrid Work Management",
       "Auto association (301 K+ AA Rooms, 522 K+ AA Peripherals and 3.5 K+ AA Desks) for BYOD Rooms & personal spaces.",
@@ -268,9 +282,27 @@ function useSlideZoom(onZoomAttempt?: () => void) {
  *  This is the real deck as it would look on a screen share. Pinch (or trackpad-pinch/
  *  ctrl+scroll) zooms just this image in place; double-tap toggles a 2x zoom. Both feed
  *  idea 1's rotate-hint signal via `onZoomAttempt`. Scoped entirely to this card — the
- *  rest of the page and the swipe-between-slides gesture are untouched. */
-export function OriginalSlideCard({ slide, onZoomAttempt }: { slide: Slide; onZoomAttempt?: () => void }) {
+ *  rest of the page and the swipe-between-slides gesture are untouched.
+ *
+ *  `onScaleComputed` reports the real object-contain scale factor once the image loads
+ *  (frame size ÷ native pixel size) — idea 1, condition 1: an objectively-computed
+ *  legibility signal instead of a behavioral guess. */
+export function OriginalSlideCard({
+  slide,
+  onZoomAttempt,
+  onScaleComputed,
+}: {
+  slide: Slide;
+  onZoomAttempt?: () => void;
+  onScaleComputed?: (scale: number) => void;
+}) {
   const { containerRef, scale, tx, ty, isZoomed, onDoubleClick } = useSlideZoom(onZoomAttempt);
+  const reportScale = (img: HTMLImageElement) => {
+    const frame = containerRef.current;
+    if (!frame || !img.naturalWidth || !img.naturalHeight) return;
+    const fit = Math.min(frame.clientWidth / img.naturalWidth, frame.clientHeight / img.naturalHeight);
+    onScaleComputed?.(fit);
+  };
   return (
     <div
       ref={containerRef}
@@ -281,6 +313,7 @@ export function OriginalSlideCard({ slide, onZoomAttempt }: { slide: Slide; onZo
         src={slide.image}
         alt={slide.title}
         onDoubleClick={onDoubleClick}
+        onLoad={(e) => reportScale(e.currentTarget)}
         draggable={false}
         className="max-w-full max-h-full object-contain select-none"
         style={{
@@ -304,10 +337,12 @@ export function OriginalSlideDeckStrip({
   onZoomAttempt,
   activeIndex = 0,
   onActiveIndexChange,
+  onSlideScaleComputed,
 }: {
   onZoomAttempt?: () => void;
   activeIndex?: number;
   onActiveIndexChange?: (index: number) => void;
+  onSlideScaleComputed?: (index: number, scale: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const slideRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -348,7 +383,7 @@ export function OriginalSlideDeckStrip({
           ref={(el) => { slideRefs.current[i] = el; }}
           className="w-full h-full shrink-0 snap-center"
         >
-          <OriginalSlideCard slide={slide} onZoomAttempt={onZoomAttempt} />
+          <OriginalSlideCard slide={slide} onZoomAttempt={onZoomAttempt} onScaleComputed={(scale) => onSlideScaleComputed?.(i, scale)} />
         </div>
       ))}
     </div>

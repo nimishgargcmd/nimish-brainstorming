@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { DEMO_SLIDES, type ChartData, type TableData, type LadderItem, type CardItem, type Slide } from "@/app/components/DemoSlideDeck";
+import { DEMO_SLIDES, type ChartData, type TableData, type LadderItem, type CardItem, type Slide, type SlideGraphic } from "@/app/components/DemoSlideDeck";
 
 /**
  * Liquid Mode-style "easy read" prototype (brainstorming/screensharing idea 2).
@@ -55,17 +55,17 @@ function ReflowChart({ chart, onExpand }: { chart: ChartData; onExpand: () => vo
     >
       <div className="flex items-center justify-between gap-[8px]">
         <span className="text-[#212121] text-[14px] font-semibold leading-[18px]">{chart.title}</span>
-        <span className="shrink-0 text-[#5b5fc7]"><ExpandIcon /></span>
+        <span className="shrink-0 text-[#5E54E4]"><ExpandIcon /></span>
       </div>
       <div className="flex flex-col gap-[10px]">
         {chart.bars.map((bar) => (
           <div key={bar.label} className="flex flex-col gap-[4px]">
             <div className="flex items-center justify-between text-[12px] text-[#616161]">
               <span>{bar.label}</span>
-              <span className="font-medium text-[#212121]">{bar.display}</span>
+              <span className="font-medium text-[#419E88]">{bar.display}</span>
             </div>
             <div className="h-[10px] rounded-full bg-[#e1e1e1] overflow-hidden">
-              <div className="h-full rounded-full bg-[#5b5fc7]" style={{ width: `${bar.widthPct}%` }} />
+              <div className="h-full rounded-full bg-[#6D6BC5]" style={{ width: `${bar.widthPct}%` }} />
             </div>
           </div>
         ))}
@@ -85,10 +85,10 @@ function ChartExpandOverlay({ chart, onClose }: { chart: ChartData; onClose: () 
             <div key={bar.label} className="flex flex-col gap-[6px]">
               <div className="flex items-center justify-between text-[13px] text-[#616161]">
                 <span>{bar.label}</span>
-                <span className="text-[18px] font-semibold text-[#212121]">{bar.display}</span>
+                <span className="text-[18px] font-semibold text-[#419E88]">{bar.display}</span>
               </div>
               <div className="h-[16px] rounded-full bg-[#e1e1e1] overflow-hidden">
-                <div className="h-full rounded-full bg-[#5b5fc7]" style={{ width: `${bar.widthPct}%` }} />
+                <div className="h-full rounded-full bg-[#6D6BC5]" style={{ width: `${bar.widthPct}%` }} />
               </div>
             </div>
           ))}
@@ -154,13 +154,20 @@ function ReflowTable({ table }: { table: TableData }) {
 
 /** The non-text visuals a slide carries (diagrams, photos, trend-line graphs) — each cropped to
  *  a single item and shown one per row (not combined into one wide strip) so every item stays
- *  legible at phone width, right after the reflowed text/structured content it belongs to. */
-function ReflowGraphics({ srcs, title }: { srcs: string[]; title: string }) {
+ *  legible at phone width. Each gets its own caption (the same verbatim label already used
+ *  elsewhere on the slide, e.g. the chart series or table row it illustrates) so a chart is
+ *  never shown headless — with no way to tell which item it is. */
+function ReflowGraphics({ graphics, title }: { graphics: SlideGraphic[]; title: string }) {
   return (
-    <div className="flex flex-col gap-[10px]">
-      {srcs.map((src, i) => (
-        <div key={src} className="rounded-[8px] border border-[#e1e1e1] overflow-hidden bg-white">
-          <img src={src} alt={`${title} \u2014 graphic ${i + 1} of ${srcs.length}`} className="w-full h-auto block" />
+    <div className="flex flex-col gap-[14px]">
+      {graphics.map((g, i) => (
+        <div key={g.src} className="flex flex-col gap-[6px]">
+          {g.caption && (
+            <span className="text-[#212121] text-[13px] font-semibold leading-[16px]">{g.caption}</span>
+          )}
+          <div className="rounded-[8px] border border-[#e1e1e1] overflow-hidden bg-white">
+            <img src={g.src} alt={`${g.caption ?? title} \u2014 graphic ${i + 1} of ${graphics.length}`} className="w-full h-auto block" />
+          </div>
         </div>
       ))}
     </div>
@@ -184,7 +191,7 @@ function ReflowLadder({ items }: { items: LadderItem[] }) {
     <ol className="flex flex-col gap-[10px]">
       {items.map((item, i) => (
         <li key={item.title} className="flex gap-[12px] items-start rounded-[12px] border border-[#e1e1e1] bg-[#f8f8f8] p-[14px]">
-          <span className="shrink-0 size-[24px] rounded-full bg-[#5b5fc7] text-white text-[12px] font-semibold flex items-center justify-center">
+          <span className="shrink-0 size-[24px] rounded-full bg-[#5E54E4] text-white text-[12px] font-semibold flex items-center justify-center">
             {i + 1}
           </span>
           <div className="flex flex-col gap-[2px] min-w-0">
@@ -203,7 +210,7 @@ function ReflowCards({ cards }: { cards: CardItem[] }) {
   return (
     <div className="flex flex-col gap-[10px]">
       {cards.map((card) => {
-        const toneColor = card.tone === "positive" ? "#107C10" : card.tone === "caution" ? "#986F0B" : undefined;
+        const toneColor = card.tone === "positive" ? "#4B9633" : card.tone === "caution" ? "#D38403" : undefined;
         return (
           <div
             key={card.title}
@@ -260,7 +267,7 @@ function ReflowBody({ slide, onExpandChart }: { slide: Slide; onExpandChart: () 
       {slide.kind === "cards" && <ReflowCards cards={slide.cards} />}
 
       {slide.graphicImages && slide.graphicImages.length > 0 && (
-        <ReflowGraphics srcs={slide.graphicImages} title={slide.title} />
+        <ReflowGraphics graphics={slide.graphicImages} title={slide.title} />
       )}
     </div>
   );
@@ -298,7 +305,7 @@ export function LiquidReflowContentView({ onExit, sharerName = "Aadi Kapoor", in
           type="button"
           aria-label="Exit easy read"
           onClick={onExit}
-          className="size-[36px] rounded-full flex items-center justify-center bg-[#f1f1f1] text-[#5b5fc7] shrink-0"
+          className="size-[36px] rounded-full flex items-center justify-center bg-[#f1f1f1] text-[#5E54E4] shrink-0"
         >
           <BackChevronIcon />
         </button>
@@ -323,7 +330,7 @@ export function LiquidReflowContentView({ onExit, sharerName = "Aadi Kapoor", in
           aria-label="Previous easy-read slide"
           onClick={goPrev}
           disabled={slideIndex === 0}
-          className="size-[28px] rounded-full flex items-center justify-center bg-[#f1f1f1] text-[#5b5fc7] disabled:opacity-30"
+          className="size-[28px] rounded-full flex items-center justify-center bg-[#f1f1f1] text-[#5E54E4] disabled:opacity-30"
         >
           <ChevronIcon direction="left" />
         </button>
@@ -335,7 +342,7 @@ export function LiquidReflowContentView({ onExit, sharerName = "Aadi Kapoor", in
           aria-label="Next easy-read slide"
           onClick={goNext}
           disabled={slideIndex === DEMO_SLIDES.length - 1}
-          className="size-[28px] rounded-full flex items-center justify-center bg-[#f1f1f1] text-[#5b5fc7] disabled:opacity-30"
+          className="size-[28px] rounded-full flex items-center justify-center bg-[#f1f1f1] text-[#5E54E4] disabled:opacity-30"
         >
           <ChevronIcon direction="right" />
         </button>
