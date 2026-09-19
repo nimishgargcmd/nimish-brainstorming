@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router";
-import { ScanFace } from "lucide-react";
+import { Camera, ScanFace, X } from "lucide-react";
 import svgPaths from "@/imports/svg-0tmtsigajy";
 import { MicOnIcon } from "@/app/components/MicOnIcon";
 import { MicOffIcon } from "@/app/components/MicOffIcon";
@@ -160,7 +160,7 @@ export function PreJoinPage() {
   // Real-time detection drives all three corrections (only meaningful once a live stream exists).
   const hasLiveStream = isVideoOn && !!cameraStream && !cameraError;
   const faceFraming = useFaceFraming(videoEl, hasLiveStream, autoEnhanceOn);
-  const lightingQuality = useLightingQualityAnalysis(videoEl, hasLiveStream && autoEnhanceOn);
+  const lightingQuality = useLightingQualityAnalysis(videoEl, hasLiveStream, autoEnhanceOn, !faceFraming.isFramingPaused);
 
   // <video ref> needs to both receive the shared camera stream (attachVideo) and be readable
   // here for face detection — combine both into one ref callback.
@@ -564,7 +564,7 @@ export function PreJoinPage() {
                 aria-hidden
                 className="animate-ai-sweep absolute inset-0 z-[15] pointer-events-none"
                 style={{
-                  visibility: faceFraming.isFramingPaused ? "hidden" : "visible",
+                  visibility: faceFraming.isFramingPaused || lightingQuality.showCleaningCue ? "hidden" : "visible",
                   backgroundImage:
                     "linear-gradient(100deg, rgba(255,255,255,0) 35%, rgba(255,255,255,0.55) 48%, rgba(168,152,250,0.6) 50%, rgba(255,255,255,0.55) 52%, rgba(255,255,255,0) 65%)",
                   backgroundSize: "300% 100%",
@@ -573,7 +573,7 @@ export function PreJoinPage() {
             )}
 
             {/* Auto-enhance badge — flashes for 1s like a toast, then dismisses itself */}
-            {isVideoOn && isBadgeVisible && !faceFraming.isFramingPaused && (
+            {isVideoOn && isBadgeVisible && !faceFraming.isFramingPaused && !lightingQuality.showCleaningCue && (
               <div
                 className="absolute left-1/2 -translate-x-1/2 z-20 flex items-center gap-[4px] px-[10px] py-[4px] rounded-full"
                 style={{ top: "52px", backgroundColor: "rgba(0,0,0,0.55)" }}
@@ -591,12 +591,20 @@ export function PreJoinPage() {
               aria-atomic="true"
               className="absolute left-[12px] right-[56px] top-[52px] z-20 flex justify-center pointer-events-none"
             >
-              {hasLiveStream && faceFraming.showPartialFaceCue && (
+              {hasLiveStream && faceFraming.showPartialFaceCue ? (
                 <span className="inline-flex items-center gap-[6px] rounded-[4px] bg-black/70 px-[10px] py-[6px] text-[12px] leading-[16px] text-center text-fy27-text-global">
                   <ScanFace size={16} className="shrink-0" aria-hidden="true" />
                   <span>Move fully into view</span>
                 </span>
-              )}
+              ) : hasLiveStream && lightingQuality.showCleaningCue ? (
+                <div className="pointer-events-auto inline-flex max-w-full items-center gap-[6px] rounded-[4px] bg-black/70 pl-[10px] text-[12px] leading-[16px] text-fy27-text-global">
+                  <Camera size={16} className="shrink-0" aria-hidden="true" />
+                  <span className="min-w-0 py-[6px]">Camera looks blurry. Try cleaning the lens.</span>
+                  <button type="button" aria-label="Dismiss camera cleaning advice" title="Dismiss camera cleaning advice" onClick={lightingQuality.dismissCleaningCue} className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-[4px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">
+                    <X size={16} aria-hidden="true" />
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             {faceFraming.diagnostic !== null && (
@@ -620,6 +628,12 @@ export function PreJoinPage() {
             </div>
           </div>
         </div>
+
+        {lightingQuality.diagnostic !== null && (
+          <output aria-label="Camera quality diagnostics" className="mx-[16px] max-h-[140px] shrink-0 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-[15px] text-fy27-text-primary">
+            {lightingQuality.diagnostic}
+          </output>
+        )}
 
         {/* Audio Device Picker — iOS Context Menu style (HIG: label left, icon right, checkmark leading) */}
         {showAudioPicker && (
