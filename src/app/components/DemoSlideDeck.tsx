@@ -46,6 +46,9 @@ export interface TableData {
 export interface LadderItem {
   title: string;
   description: string;
+  /** Matches the real slide's own colored phase boxes/dots (green = already done,
+   *  indigo = still upcoming) \u2014 losing this status made every phase look identical. */
+  status?: "done" | "upcoming";
 }
 
 export interface CardItem {
@@ -77,15 +80,15 @@ export const DEMO_SLIDES: Slide[] = [
     image: slideImg1,
     graphicImages: [{ src: slide1TimelinePart1 }, { src: slide1TimelinePart2 }, { src: slide1TimelinePart3 }],
     items: [
-      { title: "Pre-Rollout \u2014 Jan 2026", description: "MC announcement, Docs published" },
-      { title: "MSD \u2014 Mar 2026", description: "Weekly MSD calls" },
-      { title: "OEMs \u2014 Apr 2026", description: "TAC in-portal messaging, Migration guide, TAP calls" },
-      { title: "TAP \u2014 May 2026", description: "Migration tracker (internal), CSM outreach begins" },
-      { title: "GA - All Customers \u2014 June 2026", description: "Office hours (cont.), TAP calls (cont.)" },
-      { title: "GA- Gov (GCCH/DoD) Clouds \u2014 July 2026", description: "MC comms / docs updates for Gov cloud customers, Migration tracker for Gov cloud" },
-      { title: "GA - Gov (GCC) Clouds \u2014 Aug - 2026", description: "" },
-      { title: "TAC DM Deprecation \u2013 Prod \u2014 Sept \u2013 2026", description: "" },
-      { title: "TAC DM Deprecation \u2013 GCC/CCH/DoD \u2014 Sept \u2013 2026", description: "" },
+      { title: "Pre-Rollout \u2014 Jan 2026", description: "MC announcement, Docs published", status: "done" },
+      { title: "MSD \u2014 Mar 2026", description: "Weekly MSD calls", status: "done" },
+      { title: "OEMs \u2014 Apr 2026", description: "TAC in-portal messaging, Migration guide, TAP calls", status: "done" },
+      { title: "TAP \u2014 May 2026", description: "Migration tracker (internal), CSM outreach begins", status: "done" },
+      { title: "GA - All Customers \u2014 June 2026", description: "Office hours (cont.), TAP calls (cont.)", status: "done" },
+      { title: "GA- Gov (GCCH/DoD) Clouds \u2014 July 2026", description: "MC comms / docs updates for Gov cloud customers, Migration tracker for Gov cloud", status: "done" },
+      { title: "GA - Gov (GCC) Clouds \u2014 Aug - 2026", description: "", status: "upcoming" },
+      { title: "TAC DM Deprecation \u2013 Prod \u2014 Sept \u2013 2026", description: "", status: "upcoming" },
+      { title: "TAC DM Deprecation \u2013 GCC/CCH/DoD \u2014 Sept \u2013 2026", description: "", status: "upcoming" },
     ],
   },
   {

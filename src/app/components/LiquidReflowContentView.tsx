@@ -189,19 +189,28 @@ function ReflowCode({ code, caption }: { code: string[]; caption: string }) {
 function ReflowLadder({ items }: { items: LadderItem[] }) {
   return (
     <ol className="flex flex-col gap-[10px]">
-      {items.map((item, i) => (
-        <li key={item.title} className="flex gap-[12px] items-start rounded-[12px] border border-[#e1e1e1] bg-[#f8f8f8] p-[14px]">
-          <span className="shrink-0 size-[24px] rounded-full bg-[#5E54E4] text-white text-[12px] font-semibold flex items-center justify-center">
-            {i + 1}
-          </span>
-          <div className="flex flex-col gap-[2px] min-w-0">
-            <span className="text-[#212121] text-[14px] font-semibold leading-[18px]">{item.title}</span>
-            {item.description && (
-              <span className="text-[#616161] text-[13px] leading-[17px]">{item.description}</span>
-            )}
-          </div>
-        </li>
-      ))}
+      {items.map((item, i) => {
+        const done = item.status === "done";
+        return (
+          <li
+            key={item.title}
+            className={`flex gap-[12px] items-start rounded-[12px] border p-[14px] ${done ? "bg-[#E7F4EA] border-[#C5E3CA]" : "bg-[#f8f8f8] border-[#e1e1e1]"}`}
+          >
+            <span
+              className="shrink-0 size-[24px] rounded-full text-white text-[12px] font-semibold flex items-center justify-center"
+              style={{ backgroundColor: done ? "#2E7429" : "#4C47CE" }}
+            >
+              {i + 1}
+            </span>
+            <div className="flex flex-col gap-[2px] min-w-0">
+              <span className="text-[14px] font-semibold leading-[18px]" style={{ color: done ? "#2E7429" : "#212121" }}>{item.title}</span>
+              {item.description && (
+                <span className="text-[#616161] text-[13px] leading-[17px]">{item.description}</span>
+              )}
+            </div>
+          </li>
+        );
+      })}
     </ol>
   );
 }
