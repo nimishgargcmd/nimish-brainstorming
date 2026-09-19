@@ -120,7 +120,11 @@ export function MeetingPage() {
 
   // Divider drag: panel follows the finger between the default (65vh) and immersive (fill) detents.
   const panelDefaultPx = () => window.innerHeight * 0.65;
-  const panelFillPx = () => window.innerHeight - IMMERSIVE_OFFSET_PX;
+  const panelFillPx = () => {
+    const screen = document.querySelector(".app-safe-top");
+    const topInset = screen ? parseFloat(getComputedStyle(screen).paddingTop) || 0 : 0;
+    return window.innerHeight - topInset - IMMERSIVE_OFFSET_PX;
+  };
 
   const handlePanelDragDown = useCallback((e: React.PointerEvent) => {
     const startH = isImmersive ? panelFillPx() : panelDefaultPx();
@@ -1203,7 +1207,7 @@ export function MeetingPage() {
       {/* Screen-reader-only announcement for the odd-numbered "indicator only" recording triggers */}
       <span aria-live="assertive" className="sr-only">{recordingAnnouncement}</span>
       {/* Meeting Content - Vertical Stack */}
-      <div className="absolute top-0 bottom-0 left-0 right-0 flex flex-col bg-fy27-surface pt-[59px]">
+      <div className="app-safe-top absolute top-0 bottom-0 left-0 right-0 flex flex-col bg-fy27-surface">
         {/* Immersive mode replaces the header + AIL with a minimal meeting-presence strip */}
         {isImmersive && activePanel ? (
           <ImmersiveMeetingBar participantCount={totalParticipants} onEndCall={handleEndCall} onBack={handleBack} isRecording={isRecording} />

@@ -145,7 +145,7 @@ export function CatchupPage() {
 
   return (
     <div
-      className="w-full h-full bg-fy27-surface-base flex flex-col relative overflow-hidden pt-[59px]"
+      className="app-safe-top w-full h-full bg-fy27-surface-base flex flex-col relative overflow-hidden"
       style={{ fontFamily: "var(--font-sf-pro)" }}
     >
       {/* ─── Minimized meeting dock strip (ECS-gated, only while a meeting is ongoing) ─── */}

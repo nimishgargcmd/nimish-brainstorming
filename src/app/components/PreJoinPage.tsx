@@ -436,11 +436,11 @@ export function PreJoinPage() {
   return (
     <div
       ref={pageRef}
-      className="w-full h-full bg-fy27-surface flex flex-col relative overflow-hidden pt-[59px]"
+      className="app-safe-top w-full h-full bg-fy27-surface flex flex-col relative overflow-hidden"
       style={{ fontFamily: "var(--font-sf-pro)" }}
     >
       {/* ─── Main Content ─── */}
-      <div className="flex-1 flex flex-col gap-[16px]">
+      <div className="flex-1 min-h-0 flex flex-col gap-[16px]">
         {/* Top Bar: X button + Meeting Title */}
         <div className="flex gap-[20px] items-center justify-center shrink-0 w-full mx-[0px] mt-[10px] mb-[0px]">
           {/* X / Dismiss button */}
@@ -778,7 +778,7 @@ export function PreJoinPage() {
 
         {/* ─── Buttons ─── */}
         <div className="shrink-0 w-full">
-          <div className="flex flex-col gap-[12px] items-center px-[16px] w-full mx-[0px] mt-[0px] mb-[40px]">
+          <div className="flex flex-col gap-[12px] items-center px-[16px] w-full mx-[0px] mt-[0px]" style={{ marginBottom: "var(--app-footer-inset)" }}>
             {/* Join now — MVP: Accent rounded-8 (Figma 1143:60669); Final Vision: original round pill (rounded-[50px], Figma Make `ButtonsOnPreJoin`) */}
             <button
               onClick={handleJoinNow}

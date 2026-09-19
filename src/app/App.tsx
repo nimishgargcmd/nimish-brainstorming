@@ -12,9 +12,9 @@ export default function App() {
   return (
     <ThemeProvider>
       <VersionProvider>
-        <div className="fixed inset-0 overflow-hidden bg-black flex justify-center">
+        <div className="app-viewport fixed inset-x-0 top-0 overflow-hidden bg-black flex justify-center">
           {/* Mobile Frame — 100% on real phones, capped for desktop preview */}
-          <div className="relative w-full h-full max-w-[430px] overflow-hidden">
+          <div className="app-frame relative w-full h-full max-w-[430px] overflow-hidden">
             <ToastProvider>
               <RouterProvider router={router} />
               <PresentationPointer />

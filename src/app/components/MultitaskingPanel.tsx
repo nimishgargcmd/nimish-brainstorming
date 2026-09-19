@@ -50,7 +50,7 @@ export function MultitaskingPanel({
     dragHeight != null
       ? `${dragHeight}px`
       : isImmersive
-      ? `calc(100dvh - ${IMMERSIVE_OFFSET_PX}px)`
+      ? `calc(100dvh - var(--app-top-inset) - ${IMMERSIVE_OFFSET_PX}px)`
       : DEFAULT_HEIGHT;
 
   const shellClass = isMvp

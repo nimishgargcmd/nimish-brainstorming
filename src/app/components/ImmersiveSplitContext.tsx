@@ -1,7 +1,7 @@
 import React, { createContext, useContext } from "react";
 
-/** Reserved above the immersive panel: status bar (59) + minimal strip (48) + divider handle (10). */
-export const IMMERSIVE_OFFSET_PX = 117;
+/** Reserved above the immersive panel, excluding the device-dependent top inset: strip (48) + handle (10). */
+export const IMMERSIVE_OFFSET_PX = 58;
 
 interface ImmersiveSplitView {
   /** Whether the panel is maximized. */

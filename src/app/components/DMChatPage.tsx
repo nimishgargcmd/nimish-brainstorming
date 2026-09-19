@@ -171,7 +171,7 @@ function DMChatInner() {
 
   return (
     <div
-      className={`w-full h-full flex flex-col relative overflow-hidden pt-[59px] ${docked ? "bg-fy27-surface-subtlest" : "bg-fy27-surface"}`}
+      className={`app-safe-top w-full h-full flex flex-col relative overflow-hidden ${docked ? "bg-fy27-surface-subtlest" : "bg-fy27-surface"}`}
       style={{ fontFamily: "var(--font-sf-pro)" }}
     >
       {/* Recessed meeting dock — on the grey background layer (self-gates).
