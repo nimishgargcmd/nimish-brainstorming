@@ -134,10 +134,14 @@ export function PreJoinPage() {
     [attachVideo]
   );
 
-  // Acquire camera on mount (idempotent — no-op if already active)
+  // Acquire camera on mount, and retry whenever the user turns video back on — acquireCamera()
+  // is idempotent (no-op once a healthy stream exists), so this just covers the case where the
+  // initial mount-time request never got a permission prompt or was denied/dismissed.
   useEffect(() => {
-    acquireCamera();
-  }, [acquireCamera]);
+    if (isVideoOn) {
+      acquireCamera();
+    }
+  }, [isVideoOn, acquireCamera]);
 
   // Sync track.enabled with local isVideoOn
   useEffect(() => {
@@ -326,7 +330,12 @@ export function PreJoinPage() {
     <div className="w-full flex items-start justify-between p-[12px] bg-gradient-to-t from-[rgba(0,0,0,0.73)] to-[rgba(0,0,0,0)]">
       {/* Video toggle */}
       <button
-        onClick={() => setIsVideoOn(v => !v)}
+        onClick={() => {
+          // Re-request the camera directly inside the click handler (a real user gesture) —
+          // more reliable than an effect alone for getting the permission prompt on mobile.
+          if (!isVideoOn) void acquireCamera();
+          setIsVideoOn(v => !v);
+        }}
         className="flex flex-[1_0_0] flex-col items-center justify-center overflow-clip relative cursor-pointer"
       >
         <div className="flex flex-col gap-[4px] items-center justify-center overflow-clip relative shrink-0">
@@ -486,6 +495,19 @@ export function PreJoinPage() {
                 className="absolute inset-0 w-full h-full object-cover pointer-events-none"
                 style={isVideoOn ? { filter: selfVideoFilter, transform: selfVideoTransform, objectFit: selfVideoObjectFit, transition: "filter 300ms ease, transform 300ms ease" } : undefined}
               />
+            )}
+
+            {/* If the browser has already denied camera permission, retrying silently does nothing —
+                surface that instead of leaving the fallback photo unexplained. */}
+            {isVideoOn && cameraError && (
+              <div
+                className="absolute left-1/2 -translate-x-1/2 z-20 px-[12px] py-[6px] rounded-[8px] text-center"
+                style={{ top: "52px", backgroundColor: "rgba(0,0,0,0.65)", maxWidth: "80%" }}
+              >
+                <span className="text-[11px] text-white" style={{ fontWeight: 500 }}>
+                  Camera blocked — check this site's camera permission in your browser settings
+                </span>
+              </div>
             )}
 
             {/* One-shot "AI made a change" sweep — replays (remounts via key) each time a chip newly gets corrected */}
