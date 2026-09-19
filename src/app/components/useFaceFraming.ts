@@ -21,6 +21,43 @@ const DETECT_INTERVAL_MS = 250;
 const MEANINGFUL_SCALE_DELTA = 0.06;
 const MEANINGFUL_OFFSET_PERCENT = 4;
 
+// Stability controls: once a correction is applied, small subsequent movements are
+// ignored (dead-zone) so the frame doesn't keep nudging on every twitch. A distinct,
+// larger change has to persist for COMMIT_DEBOUNCE_MS before it's actually applied,
+// so a brief lean-over doesn't trigger an instant reframe. If the face disappears
+// only briefly (glance away, momentary miss), the last framing is kept as-is rather
+// than snapping back to raw.
+const DEADZONE_SCALE_DELTA = 0.08;
+const DEADZONE_OFFSET_FRACTION = 0.03; // 3% of tile size
+const COMMIT_DEBOUNCE_MS = 1300;
+const MISS_GRACE_TICKS = 8; // ~2s at DETECT_INTERVAL_MS before clearing on lost detection
+
+interface CorrectionCandidate {
+  scale: number;
+  tx: number; // fraction, not yet a percent string
+  ty: number;
+}
+
+function candidatesDiffer(a: CorrectionCandidate, b: CorrectionCandidate): boolean {
+  return (
+    Math.abs(a.scale - b.scale) > DEADZONE_SCALE_DELTA ||
+    Math.abs(a.tx - b.tx) > DEADZONE_OFFSET_FRACTION ||
+    Math.abs(a.ty - b.ty) > DEADZONE_OFFSET_FRACTION
+  );
+}
+
+function candidateToTransform(c: CorrectionCandidate): string {
+  return `scaleX(-1) scale(${c.scale.toFixed(3)}) translate(${(c.tx * 100).toFixed(2)}%, ${(c.ty * 100).toFixed(2)}%)`;
+}
+
+function isCandidateMeaningful(c: CorrectionCandidate): boolean {
+  return (
+    Math.abs(c.scale - 1) > MEANINGFUL_SCALE_DELTA ||
+    Math.abs(c.tx * 100) > MEANINGFUL_OFFSET_PERCENT ||
+    Math.abs(c.ty * 100) > MEANINGFUL_OFFSET_PERCENT
+  );
+}
+
 export interface FaceFramingResult {
   /** True once BlazeFace has finished loading and detection can run. */
   isModelReady: boolean;
@@ -66,6 +103,12 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
 
     let cancelled = false;
     let inFlight = false;
+    // The currently-applied (committed) correction, and a pending candidate waiting
+    // to prove it's a sustained change before it gets committed.
+    let applied: CorrectionCandidate | null = null;
+    let pending: { candidate: CorrectionCandidate; since: number } | null = null;
+    let missTicks = 0;
+
     const interval = setInterval(() => {
       if (inFlight) return;
       const model = modelRef.current;
@@ -75,11 +118,20 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
         .estimateFaces(videoEl, false)
         .then((predictions) => {
           if (cancelled) return;
+
           if (!predictions.length) {
-            setCorrectiveTransform(undefined);
-            setIsCorrecting(false);
+            missTicks += 1;
+            if (missTicks > MISS_GRACE_TICKS) {
+              applied = null;
+              pending = null;
+              setCorrectiveTransform(undefined);
+              setIsCorrecting(false);
+            }
+            // Within the grace period: keep showing whatever's currently applied.
             return;
           }
+          missTicks = 0;
+
           // Use the most confident detection.
           const face = predictions.reduce((best, p) =>
             (p.probability?.[0] ?? 0) > (best.probability?.[0] ?? 0) ? p : best
@@ -101,14 +153,35 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
           const uTarget = TARGET_CENTER_Y - 0.5;
           const tx = -vTarget / scale - v0;
           const ty = uTarget / scale - u0;
+          const candidate: CorrectionCandidate = { scale, tx, ty };
 
-          const isMeaningful =
-            Math.abs(scale - 1) > MEANINGFUL_SCALE_DELTA ||
-            Math.abs(tx * 100) > MEANINGFUL_OFFSET_PERCENT ||
-            Math.abs(ty * 100) > MEANINGFUL_OFFSET_PERCENT;
+          if (!applied) {
+            applied = candidate;
+            pending = null;
+            setCorrectiveTransform(candidateToTransform(applied));
+            setIsCorrecting(isCandidateMeaningful(applied));
+            return;
+          }
 
-          setCorrectiveTransform(`scaleX(-1) scale(${scale.toFixed(3)}) translate(${(tx * 100).toFixed(2)}%, ${(ty * 100).toFixed(2)}%)`);
-          setIsCorrecting(isMeaningful);
+          if (!candidatesDiffer(candidate, applied)) {
+            // Still within the dead-zone of what's already applied — hold steady.
+            pending = null;
+            return;
+          }
+
+          const now = Date.now();
+          if (pending && !candidatesDiffer(candidate, pending.candidate)) {
+            // Same distinct change persisting — commit once it's held long enough.
+            if (now - pending.since >= COMMIT_DEBOUNCE_MS) {
+              applied = candidate;
+              pending = null;
+              setCorrectiveTransform(candidateToTransform(applied));
+              setIsCorrecting(isCandidateMeaningful(applied));
+            }
+          } else {
+            // A new distinct change just appeared — start its debounce timer.
+            pending = { candidate, since: now };
+          }
         })
         .catch(() => {
           // Transient detection error (e.g. frame not ready) — ignore, try again next tick.
@@ -126,3 +199,4 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
 
   return { isModelReady, correctiveTransform, isCorrecting };
 }
+

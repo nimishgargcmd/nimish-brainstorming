@@ -287,6 +287,8 @@ export function PreJoinPage() {
   // apply the computed corrective zoom + recenter; otherwise just mirror (show real framing as-is).
   const selfVideoTransform = autoEnhanceOn && faceFraming.correctiveTransform ? faceFraming.correctiveTransform : "scaleX(-1)";
   const selfVideoObjectFit: "cover" | "contain" = "cover";
+  // Slow, gentle glide for auto-framing/enhance corrections — a fast snap reads as jumpy.
+  const selfVideoStyle = { filter: selfVideoFilter, transform: selfVideoTransform, objectFit: selfVideoObjectFit, transition: "filter 400ms ease, transform 1100ms cubic-bezier(0.22, 1, 0.36, 1)" };
 
   const topBarContent = (
     <div className="flex items-start justify-between px-[16px] w-full">
@@ -486,14 +488,14 @@ export function PreJoinPage() {
                 playsInline
                 muted
                 className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-                style={{ filter: selfVideoFilter, transform: selfVideoTransform, objectFit: selfVideoObjectFit, transition: "filter 300ms ease, transform 300ms ease" }}
+                style={selfVideoStyle}
               />
             ) : (
               <img
                 src={imgSelf}
                 alt="You"
                 className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-                style={isVideoOn ? { filter: selfVideoFilter, transform: selfVideoTransform, objectFit: selfVideoObjectFit, transition: "filter 300ms ease, transform 300ms ease" } : undefined}
+                style={isVideoOn ? selfVideoStyle : undefined}
               />
             )}
 
