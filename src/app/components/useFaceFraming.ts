@@ -127,7 +127,8 @@ function calculateFramingCandidate(
   );
   if (minScale > maxScale) return { ...neutral, reason: `Head margins cannot fit (${minScale.toFixed(2)} > ${maxScale.toFixed(2)})` };
 
-  const scale = Math.max(minScale, Math.min(maxScale, TARGET_FACE_HEIGHT / faceHeight));
+  const horizontalCenteringScale = 1 / (coverageX - 2 * Math.abs(centerX - 0.5));
+  const scale = Math.max(minScale, Math.min(maxScale, Math.max(TARGET_FACE_HEIGHT / faceHeight, horizontalCenteringScale)));
   const maxOffsetX = (coverageX - 1 / scale) / 2;
   const maxOffsetY = (coverageY - 1 / scale) / 2;
   const minTx = Math.max(-maxOffsetX, (TILE_MARGIN_SIDE - 0.5) / scale - (headLeft - 0.5));
