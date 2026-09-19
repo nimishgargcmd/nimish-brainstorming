@@ -79,6 +79,14 @@ function AnimatedDots() {
 
 /* ─── PreJoinPage Component ─── */
 
+function markEnhanceIntroSeen() {
+  try {
+    localStorage.setItem("preJoinAutoEnhanceIntroSeen", "true");
+  } catch {
+    return;
+  }
+}
+
 export function PreJoinPage() {
   const navigate = useNavigate();
   const meeting = useActiveMeeting();
@@ -113,15 +121,44 @@ export function PreJoinPage() {
 
   // Video auto-enhance demo (brainstorming/video bucket 1): lighting, quality, and framing
   // are all detected live off the camera feed and corrected automatically — no toggles.
-  const [autoEnhanceOn, setAutoEnhanceOn] = useState(true);
+  const [enhanceIntroPending, setEnhanceIntroPending] = useState(() => {
+    try {
+      return localStorage.getItem("preJoinAutoEnhanceIntroSeen") !== "true";
+    } catch {
+      return true;
+    }
+  });
+  const [autoEnhanceOn, setAutoEnhanceOn] = useState(!enhanceIntroPending);
+  const enhanceButtonRef = useRef<HTMLButtonElement>(null);
+  const enhanceIntroAnimationRef = useRef<Animation | null>(null);
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    if (!enhanceIntroPending || !isVideoOn) return;
+    const timer = setTimeout(() => {
+      setAutoEnhanceOn(true);
+      setEnhanceIntroPending(false);
+      markEnhanceIntroSeen();
+      const button = enhanceButtonRef.current;
+      if (button && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        enhanceIntroAnimationRef.current = button.animate([
+          { transform: "scale(1)", backgroundColor: "rgba(255,255,255,0.16)" },
+          { transform: "scale(1.2)", offset: 0.5 },
+          { transform: "scale(1)", backgroundColor: getComputedStyle(button).getPropertyValue("--fy27-brand-primary").trim() },
+        ], { duration: 650, easing: "ease-in-out" });
+      }
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [enhanceIntroPending, isVideoOn]);
+
+  useEffect(() => () => enhanceIntroAnimationRef.current?.cancel(), []);
 
   // Shared camera context — single stream for the whole app
   const { stream: cameraStream, cameraError, acquireCamera, setTrackEnabled, attachVideo, flipCamera } = useCamera();
 
   // Real-time detection drives all three corrections (only meaningful once a live stream exists).
   const hasLiveStream = isVideoOn && !!cameraStream && !cameraError;
-  const faceFraming = useFaceFraming(videoEl, hasLiveStream && autoEnhanceOn);
+  const faceFraming = useFaceFraming(videoEl, hasLiveStream, autoEnhanceOn);
   const lightingQuality = useLightingQualityAnalysis(videoEl, hasLiveStream && autoEnhanceOn);
 
   // <video ref> needs to both receive the shared camera stream (attachVideo) and be readable
@@ -315,10 +352,17 @@ export function PreJoinPage() {
         {isVideoOn && (
           <button
             type="button"
-            onClick={() => setAutoEnhanceOn(v => !v)}
+            ref={enhanceButtonRef}
+            onClick={() => {
+              enhanceIntroAnimationRef.current?.cancel();
+              setEnhanceIntroPending(false);
+              markEnhanceIntroSeen();
+              setAutoEnhanceOn(v => !v);
+            }}
             aria-label={autoEnhanceOn ? "Turn off auto-enhance" : "Turn on auto-enhance"}
             aria-pressed={autoEnhanceOn}
-            className="size-[24px] rounded-full flex items-center justify-center shrink-0 cursor-pointer active:opacity-50 transition-colors duration-150"
+            title={autoEnhanceOn ? "Auto-enhance on" : "Auto-enhance off"}
+            className="size-[24px] rounded-full flex items-center justify-center shrink-0 cursor-pointer active:opacity-50 transition-colors duration-150 motion-reduce:transition-none"
             style={{ backgroundColor: autoEnhanceOn ? "var(--fy27-brand-primary)" : "rgba(255,255,255,0.16)" }}
           >
             <span style={{ fontSize: 13, lineHeight: 1 }}>✨</span>
@@ -546,7 +590,7 @@ export function PreJoinPage() {
               aria-atomic="true"
               className="absolute left-[12px] right-[56px] top-[52px] z-20 flex justify-center pointer-events-none"
             >
-              {hasLiveStream && autoEnhanceOn && faceFraming.showPartialFaceCue && (
+              {hasLiveStream && faceFraming.showPartialFaceCue && (
                 <span className="rounded-[4px] bg-black/70 px-[10px] py-[6px] text-[12px] leading-[16px] text-center text-fy27-text-global">
                   Move fully into view
                 </span>

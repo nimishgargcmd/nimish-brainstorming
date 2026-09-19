@@ -94,20 +94,175 @@ test("unknown detections and long sampling gaps interrupt confirmation", () => {
   assert.equal(state.paused, true);
 });
 
-test("lost face hides stale advice without resuming automatic movement", () => {
+test("cue persists through missing or uncertain detections until a full face returns", () => {
   let state = confirmedPartial();
   state = advance(state, "unknown", 1250);
   assert.equal(state.showCue, true);
   state = advance(state, "unknown", 3000);
-  assert.equal(state.showCue, false);
+  assert.equal(state.showCue, true);
   assert.equal(state.paused, true);
-  state = advance(state, "partial", 3250);
+  state = advance(state, "missing", 60000);
+  assert.equal(state.showCue, true);
+  for (const time of [60250, 60500, 60750, 61000]) state = advance(state, "full", time);
   assert.equal(state.showCue, false);
+  assert.equal(state.paused, false);
 });
 
-test("no face or low confidence alone never creates a cue or a pause", () => {
+test("uncertain detections alone never create a cue or a pause", () => {
   let state = initial();
   for (const time of [0, 250, 500, 1000, 3000]) state = advance(state, "unknown", time);
   assert.equal(state.paused, false);
   assert.equal(state.showCue, false);
+});
+
+test("leaving after a full face and initial absence both produce a sustained cue", () => {
+  for (const startingState of [initial(), advance(initial(), "full", 0)]) {
+    let state = startingState;
+    for (const time of [250, 500, 750, 1000]) {
+      state = advance(state, "missing", time);
+      assert.equal(state.showCue, false);
+      assert.equal(state.paused, true);
+    }
+    state = advance(state, "missing", 1250);
+    assert.equal(state.showCue, true);
+    state = advance(state, "missing", 60000);
+    assert.equal(state.showCue, true);
+  }
+});
+
+test("a brief detection miss does not display the cue", () => {
+  let state = advance(initial(), "missing", 0);
+  for (const time of [250, 500, 750, 1000]) state = advance(state, "full", time);
+  assert.equal(state.showCue, false);
+  assert.equal(state.paused, false);
+});
+
+async function createHookHarness(initialEnhancement = true) {
+  const slots = [];
+  let cursor = 0;
+  let dirty = false;
+  let effects = [];
+  let interval;
+  let now = 0;
+  let predictions = [];
+  let enhancement = initialEnhancement;
+  let cameraEnabled = true;
+  let result;
+  const video = { videoWidth: 1280, videoHeight: 720, clientWidth: 358, clientHeight: 385, readyState: 2 };
+  const react = {
+    useState(initialValue) {
+      const index = cursor++;
+      if (!(index in slots)) slots[index] = typeof initialValue === "function" ? initialValue() : initialValue;
+      return [slots[index], value => {
+        const next = typeof value === "function" ? value(slots[index]) : value;
+        if (!Object.is(next, slots[index])) { slots[index] = next; dirty = true; }
+      }];
+    },
+    useRef(value) {
+      const index = cursor++;
+      return slots[index] ??= { current: value };
+    },
+    useEffect(callback, dependencies) {
+      const index = cursor++;
+      const previous = slots[index];
+      if (!previous || dependencies.some((value, position) => !Object.is(value, previous.dependencies[position]))) {
+        effects.push(() => {
+          previous?.cleanup?.();
+          slots[index] = { dependencies, cleanup: callback() };
+        });
+      }
+    },
+  };
+  const runtime = vm.createContext({
+    module: { exports: {} },
+    require(name) {
+      if (name === "react") return react;
+      if (name === "@tensorflow/tfjs") return { ready: async () => {}, getBackend: () => "test" };
+      if (name === "@tensorflow-models/blazeface") return { load: async () => ({ estimateFaces: async () => predictions }) };
+      throw new Error(`Unexpected import: ${name}`);
+    },
+    URLSearchParams,
+    window: { location: { search: "" } },
+    performance: { now: () => now },
+    getComputedStyle: () => ({ transform: "matrix(-1.3,0,0,1.3,-24,18)", objectPosition: "40% 50%" }),
+    DOMMatrixReadOnly: class { d = 1.3; e = -24; f = 18; },
+    setInterval(callback) { interval = callback; return 1; },
+    clearInterval() { interval = undefined; },
+  });
+  vm.runInContext(transformSync(source, { loader: "ts", format: "cjs" }).code, runtime);
+  function render() {
+    let passes = 0;
+    do {
+      assert.ok(passes++ < 10, "hook render must settle");
+      cursor = 0;
+      dirty = false;
+      effects = [];
+      result = runtime.module.exports.useFaceFraming(video, cameraEnabled, enhancement);
+      effects.forEach(effect => effect());
+    } while (dirty);
+  }
+  render();
+  await new Promise(resolve => setImmediate(resolve));
+  render();
+  return {
+    get result() { return result; },
+    async tick(nextPredictions, time) {
+      predictions = nextPredictions;
+      now = time;
+      interval?.();
+      await new Promise(resolve => setImmediate(resolve));
+      render();
+      return result;
+    },
+    setEnhancement(value) { enhancement = value; render(); },
+    setCamera(value) { cameraEnabled = value; render(); },
+  };
+}
+
+const fullDetection = [{ topLeft: fullBounds.slice(0, 2), bottomRight: fullBounds.slice(2), landmarks: fullLandmarks, probability: [0.99] }];
+
+test("hook preserves cue when a framed user leaves and toggles enhancement", async () => {
+  const hook = await createHookHarness();
+  await hook.tick(fullDetection, 0);
+  assert.equal(hook.result.isCorrecting, true);
+  for (const time of [250, 500, 750, 1000, 1250]) await hook.tick([], time);
+  assert.equal(hook.result.showPartialFaceCue, true);
+  const heldTransform = hook.result.correctiveTransform;
+  await hook.tick([], 20000);
+  assert.equal(hook.result.correctiveTransform, heldTransform);
+  assert.equal(hook.result.showPartialFaceCue, true);
+  hook.setEnhancement(false);
+  assert.equal(hook.result.showPartialFaceCue, true);
+  assert.equal(hook.result.correctiveTransform, undefined);
+  await hook.tick([], 20250);
+  hook.setEnhancement(true);
+  await hook.tick([], 20500);
+  assert.equal(hook.result.showPartialFaceCue, true);
+  assert.equal(hook.result.isCorrecting, false);
+  for (const time of [20750, 21000, 21250, 21500]) await hook.tick(fullDetection, time);
+  assert.equal(hook.result.showPartialFaceCue, false);
+  assert.equal(hook.result.isCorrecting, true);
+});
+
+test("hook monitors absence and recovery with enhancement off without adjusting video", async () => {
+  const hook = await createHookHarness(false);
+  for (const time of [0, 250, 500, 750, 1000]) await hook.tick([], time);
+  assert.equal(hook.result.showPartialFaceCue, true);
+  assert.equal(hook.result.correctiveTransform, undefined);
+  for (const time of [1250, 1500, 1750, 2000]) await hook.tick(fullDetection, time);
+  assert.equal(hook.result.showPartialFaceCue, false);
+  assert.equal(hook.result.correctiveTransform, undefined);
+  assert.equal(hook.result.isCorrecting, false);
+});
+
+test("camera off clears the cue and starts fresh on re-entry", async () => {
+  const hook = await createHookHarness(false);
+  for (const time of [0, 250, 500, 750, 1000]) await hook.tick([], time);
+  assert.equal(hook.result.showPartialFaceCue, true);
+  hook.setCamera(false);
+  assert.equal(hook.result.showPartialFaceCue, false);
+  assert.equal(hook.result.isFramingPaused, false);
+  hook.setCamera(true);
+  await hook.tick(fullDetection, 1250);
+  assert.equal(hook.result.showPartialFaceCue, false);
 });

@@ -36,7 +36,6 @@ const MEANINGFUL_OFFSET_PERCENT = 4;
 const DEADZONE_SCALE_DELTA = 0.08;
 const DEADZONE_OFFSET_FRACTION = 0.03; // 3% of tile size
 const COMMIT_DEBOUNCE_MS = 1300;
-const MISS_GRACE_TICKS = 8; // ~2s at DETECT_INTERVAL_MS before clearing on lost detection
 
 interface CorrectionCandidate {
   scale: number;
@@ -152,19 +151,18 @@ function isCandidateMeaningful(c: CorrectionCandidate): boolean {
   );
 }
 
-type FaceVisibility = "partial" | "full" | "unknown";
+type FaceVisibility = "partial" | "full" | "missing" | "unknown";
 
 interface FaceVisibilityState {
   paused: boolean;
   showCue: boolean;
   partialSince: number | null;
   fullSince: number | null;
-  lastEvidenceAt: number;
   lastSampleAt: number;
 }
 
 function initialFaceVisibility(): FaceVisibilityState {
-  return { paused: false, showCue: false, partialSince: null, fullSince: null, lastEvidenceAt: 0, lastSampleAt: 0 };
+  return { paused: false, showCue: false, partialSince: null, fullSince: null, lastSampleAt: 0 };
 }
 
 function classifyFaceVisibility(
@@ -196,15 +194,13 @@ function advanceFaceVisibility(state: FaceVisibilityState, evidence: FaceVisibil
     next.partialSince = null;
     next.fullSince = null;
   }
-  if (evidence === "partial") {
+  if (evidence === "partial" || evidence === "missing") {
     next.paused = true;
     next.fullSince = null;
     next.partialSince ??= now;
-    next.lastEvidenceAt = now;
     next.showCue = state.showCue || now - next.partialSince >= 1000;
   } else if (evidence === "full") {
     next.partialSince = null;
-    next.lastEvidenceAt = now;
     next.fullSince ??= now;
     if (now - next.fullSince >= 750) {
       next.paused = false;
@@ -213,7 +209,6 @@ function advanceFaceVisibility(state: FaceVisibilityState, evidence: FaceVisibil
   } else {
     next.partialSince = null;
     next.fullSince = null;
-    if (now - state.lastEvidenceAt >= 2000) next.showCue = false;
   }
   return next;
 }
@@ -231,7 +226,7 @@ export interface FaceFramingResult {
   diagnostic: string | null;
 }
 
-export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolean): FaceFramingResult {
+export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolean, autoFramingEnabled = true): FaceFramingResult {
   const [debugEnabled] = useState(() => new URLSearchParams(window.location.search).get("framingDebug") === "1");
   const [diagnostic, setDiagnostic] = useState<string | null>(debugEnabled ? "Loading face detector" : null);
   const modelRef = useRef<blazeface.BlazeFaceModel | null>(null);
@@ -241,6 +236,16 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
   const [isCorrecting, setIsCorrecting] = useState(false);
   const [isFramingPaused, setIsFramingPaused] = useState(false);
   const [showPartialFaceCue, setShowPartialFaceCue] = useState(false);
+  const autoFramingEnabledRef = useRef(autoFramingEnabled);
+  const resetFramingRef = useRef(false);
+
+  useEffect(() => {
+    autoFramingEnabledRef.current = autoFramingEnabled;
+    resetFramingRef.current = true;
+    setCorrectiveTransform(undefined);
+    setCorrectiveObjectPosition("50% 50%");
+    setIsCorrecting(false);
+  }, [autoFramingEnabled]);
 
   // Load the model once, lazily, regardless of `enabled` (so it's ready by the time it's needed).
   useEffect(() => {
@@ -285,7 +290,7 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
     let visibility = initialFaceVisibility();
     const observeVisibility = (evidence: FaceVisibility) => {
       const next = advanceFaceVisibility(visibility, evidence, performance.now());
-      if (next.paused && !visibility.paused) {
+      if (next.paused && !visibility.paused && autoFramingEnabledRef.current) {
         const currentStyle = getComputedStyle(videoEl);
         const currentTransform = new DOMMatrixReadOnly(currentStyle.transform);
         setCorrectiveTransform(candidateToTransform({
@@ -320,19 +325,16 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
         .estimateFaces(videoEl, false)
         .then((predictions) => {
           if (cancelled) return;
+          if (resetFramingRef.current) {
+            applied = null;
+            pending = null;
+            resetFramingRef.current = false;
+          }
 
           if (!predictions.length) {
-            const paused = observeVisibility("unknown");
+            observeVisibility("missing");
             missTicks += 1;
             report(`No face detected (${missTicks} samples)`);
-            if (!paused && missTicks > MISS_GRACE_TICKS) {
-              applied = null;
-              pending = null;
-              setCorrectiveTransform(undefined);
-              setCorrectiveObjectPosition("50% 50%");
-              setIsCorrecting(false);
-            }
-            // Within the grace period: keep showing whatever's currently applied.
             return;
           }
           missTicks = 0;
@@ -349,6 +351,10 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
           );
           if (observeVisibility(evidence)) {
             report(`Framing paused (${evidence}); ${visibility.showCue ? "Move fully into view" : "confirming visibility"}\nFace ${[x1, y1, x2, y2].map(Math.round).join(", ")}`);
+            return;
+          }
+          if (!autoFramingEnabledRef.current) {
+            report(`Visibility ${evidence}; auto-framing off`);
             return;
           }
           const candidate = calculateFramingCandidate(
