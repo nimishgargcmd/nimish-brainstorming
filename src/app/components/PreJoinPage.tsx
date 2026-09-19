@@ -254,6 +254,25 @@ export function PreJoinPage() {
     prevManualEnhancingRef.current = manualEnhancingActive;
   }, [manualEnhancingActive]);
 
+  // "AI enhanced" badge behaves like a toast: it flashes on for 1s each time a new
+  // correction kicks in, then dismisses itself even if the correction is still active.
+  const [isBadgeVisible, setIsBadgeVisible] = useState(false);
+  const prevIsAutoEnhancingRef = useRef(false);
+  const badgeHideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (isAutoEnhancing && !prevIsAutoEnhancingRef.current) {
+      setIsBadgeVisible(true);
+      if (badgeHideTimeoutRef.current) clearTimeout(badgeHideTimeoutRef.current);
+      badgeHideTimeoutRef.current = setTimeout(() => setIsBadgeVisible(false), 1000);
+    }
+    prevIsAutoEnhancingRef.current = isAutoEnhancing;
+  }, [isAutoEnhancing]);
+  useEffect(() => {
+    return () => {
+      if (badgeHideTimeoutRef.current) clearTimeout(badgeHideTimeoutRef.current);
+    };
+  }, []);
+
   const videoFilterParts: string[] = [];
   if (simulateLighting) {
     videoFilterParts.push(autoEnhanceOn ? "brightness(1.05) contrast(1.05)" : "brightness(0.45) contrast(0.85)");
@@ -505,8 +524,8 @@ export function PreJoinPage() {
               />
             )}
 
-            {/* Auto-enhance badge — shown only while it is actively correcting a simulated condition */}
-            {isVideoOn && isAutoEnhancing && (
+            {/* Auto-enhance badge — flashes for 1s like a toast, then dismisses itself */}
+            {isVideoOn && isBadgeVisible && (
               <div
                 className="absolute left-1/2 -translate-x-1/2 z-20 flex items-center gap-[4px] px-[10px] py-[4px] rounded-full"
                 style={{ top: "52px", backgroundColor: "rgba(0,0,0,0.55)" }}
