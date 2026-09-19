@@ -15,6 +15,7 @@ import { IconCheck, IconChevronRight, IconDismiss } from "@/app/components/profi
 import { useVersion } from "@/app/versioning/VersionContext";
 import { isMvpFamily } from "@/app/versioning/versions";
 import { useFaceFraming } from "@/app/components/useFaceFraming";
+import { useLightingQualityAnalysis } from "@/app/components/useLightingQualityAnalysis";
 
 // Pre-join self-view backup image
 import imgSelf from "@/assets/figma/account/udayan.jpg";
@@ -110,20 +111,18 @@ export function PreJoinPage() {
   const speakerBtnRef = useRef<HTMLButtonElement>(null);
   const [menuPos, setMenuPos] = useState<{ bottom: number; right: number } | null>(null);
 
-  // Video auto-enhance demo (brainstorming/video bucket 1): lighting/quality are simulated
-  // (manual toggles), while framing is REAL — detected live off the camera feed and
-  // corrected automatically, no toggle needed.
-  const [simulateLighting, setSimulateLighting] = useState(false);
-  const [simulateQuality, setSimulateQuality] = useState(false);
+  // Video auto-enhance demo (brainstorming/video bucket 1): lighting, quality, and framing
+  // are all detected live off the camera feed and corrected automatically — no toggles.
   const [autoEnhanceOn, setAutoEnhanceOn] = useState(true);
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
 
   // Shared camera context — single stream for the whole app
   const { stream: cameraStream, cameraError, acquireCamera, setTrackEnabled, attachVideo, flipCamera } = useCamera();
 
-  // Real-time face detection drives the framing correction (only meaningful once a live stream exists).
+  // Real-time detection drives all three corrections (only meaningful once a live stream exists).
   const hasLiveStream = isVideoOn && !!cameraStream && !cameraError;
   const faceFraming = useFaceFraming(videoEl, hasLiveStream && autoEnhanceOn);
+  const lightingQuality = useLightingQualityAnalysis(videoEl, hasLiveStream && autoEnhanceOn);
 
   // <video ref> needs to both receive the shared camera stream (attachVideo) and be readable
   // here for face detection — combine both into one ref callback.
@@ -237,22 +236,21 @@ export function PreJoinPage() {
   const tileIconColor = "var(--fy27-icon-global)";
   const tileTextClass = "text-fy27-text-global";
 
-  // Auto-enhance demo: build the raw (uncorrected) vs. enhanced filter for the self feed.
-  // Lighting/quality are simulated; framing correction is real (see useFaceFraming above).
-  const anyConditionSimulated = simulateLighting || simulateQuality;
-  const manualEnhancingActive = autoEnhanceOn && anyConditionSimulated;
-  const isAutoEnhancing = manualEnhancingActive || faceFraming.isCorrecting;
+  // Auto-enhance demo: build the corrective filter for the self feed. Lighting/quality/framing
+  // are all real-time detections (see hooks above) — nothing here is a canned simulation.
+  const lightingQualityCorrecting = lightingQuality.isCorrecting;
+  const isAutoEnhancing = lightingQualityCorrecting || faceFraming.isCorrecting;
 
-  // One-shot "AI made a change" sweep animation across the tile, replayed each time a
-  // poor-condition chip newly gets corrected (not on every continuous framing tick).
+  // One-shot "AI made a change" sweep animation across the tile, replayed each time lighting
+  // or quality correction newly kicks in (not on every continuous framing tick).
   const [sweepKey, setSweepKey] = useState(0);
-  const prevManualEnhancingRef = useRef(false);
+  const prevLightingQualityCorrectingRef = useRef(false);
   useEffect(() => {
-    if (manualEnhancingActive && !prevManualEnhancingRef.current) {
+    if (lightingQualityCorrecting && !prevLightingQualityCorrectingRef.current) {
       setSweepKey((k) => k + 1);
     }
-    prevManualEnhancingRef.current = manualEnhancingActive;
-  }, [manualEnhancingActive]);
+    prevLightingQualityCorrectingRef.current = lightingQualityCorrecting;
+  }, [lightingQualityCorrecting]);
 
   // "AI enhanced" badge behaves like a toast: it flashes on for 1s each time a new
   // correction kicks in, then dismisses itself even if the correction is still active.
@@ -274,11 +272,11 @@ export function PreJoinPage() {
   }, []);
 
   const videoFilterParts: string[] = [];
-  if (simulateLighting) {
-    videoFilterParts.push(autoEnhanceOn ? "brightness(1.05) contrast(1.05)" : "brightness(0.45) contrast(0.85)");
+  if (lightingQuality.lightingFilter) {
+    videoFilterParts.push(lightingQuality.lightingFilter);
   }
-  if (simulateQuality) {
-    videoFilterParts.push(autoEnhanceOn ? "contrast(1.08) saturate(1.05)" : "blur(2.5px) saturate(0.6) contrast(0.9)");
+  if (lightingQuality.qualityFilter) {
+    videoFilterParts.push(lightingQuality.qualityFilter);
   }
   const selfVideoFilter = videoFilterParts.length ? videoFilterParts.join(" ") : undefined;
   // Real auto-framing: while auto-enhance is on and a face is detected off-center/wrongly sized,
@@ -463,26 +461,6 @@ export function PreJoinPage() {
             Choose your audio and video settings
           </p>
         </div>
-
-        {/* ─── Video auto-enhance demo controls (bucket 1 prototype) ─── */}
-        {isVideoOn && (
-          <div className="flex items-center justify-center gap-[6px] shrink-0 w-full px-[16px] flex-wrap">
-            {([
-              { label: "Poor lighting", active: simulateLighting, onToggle: () => setSimulateLighting(v => !v) },
-              { label: "Poor quality", active: simulateQuality, onToggle: () => setSimulateQuality(v => !v) },
-            ] as const).map(({ label, active, onToggle }) => (
-              <button
-                key={label}
-                type="button"
-                onClick={onToggle}
-                className={`px-[10px] py-[6px] rounded-full text-[11px] transition-colors ${active ? "bg-fy27-brand text-white" : "bg-fy27-surface-subtle-base text-fy27-text-primary"}`}
-                style={{ fontWeight: 500 }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
 
         {/* ─── Self Tile Card ─── */}
         <div className="flex items-center px-[16px] shrink-0 w-full" style={{ flex: "1 0 0", minHeight: 0 }}>
