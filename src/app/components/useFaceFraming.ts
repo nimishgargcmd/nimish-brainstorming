@@ -291,14 +291,9 @@ export function useFaceFraming(videoEl: HTMLVideoElement | null, enabled: boolea
     const observeVisibility = (evidence: FaceVisibility) => {
       const next = advanceFaceVisibility(visibility, evidence, performance.now());
       if (next.paused && !visibility.paused && autoFramingEnabledRef.current) {
-        const currentStyle = getComputedStyle(videoEl);
-        const currentTransform = new DOMMatrixReadOnly(currentStyle.transform);
-        setCorrectiveTransform(candidateToTransform({
-          scale: currentTransform.d,
-          tx: -currentTransform.e / currentTransform.d / Math.max(1, videoEl.clientWidth),
-          ty: currentTransform.f / currentTransform.d / Math.max(1, videoEl.clientHeight),
-        }));
-        setCorrectiveObjectPosition(currentStyle.objectPosition);
+        applied = null;
+        setCorrectiveTransform(undefined);
+        setCorrectiveObjectPosition("50% 50%");
         setIsCorrecting(false);
       }
       if (next.paused || visibility.paused) pending = null;

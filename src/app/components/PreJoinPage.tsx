@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router";
+import { ScanFace } from "lucide-react";
 import svgPaths from "@/imports/svg-0tmtsigajy";
 import { MicOnIcon } from "@/app/components/MicOnIcon";
 import { MicOffIcon } from "@/app/components/MicOffIcon";
@@ -591,8 +592,9 @@ export function PreJoinPage() {
               className="absolute left-[12px] right-[56px] top-[52px] z-20 flex justify-center pointer-events-none"
             >
               {hasLiveStream && faceFraming.showPartialFaceCue && (
-                <span className="rounded-[4px] bg-black/70 px-[10px] py-[6px] text-[12px] leading-[16px] text-center text-fy27-text-global">
-                  Move fully into view
+                <span className="inline-flex items-center gap-[6px] rounded-[4px] bg-black/70 px-[10px] py-[6px] text-[12px] leading-[16px] text-center text-fy27-text-global">
+                  <ScanFace size={16} className="shrink-0" aria-hidden="true" />
+                  <span>Move fully into view</span>
                 </span>
               )}
             </div>

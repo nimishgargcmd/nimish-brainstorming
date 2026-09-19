@@ -184,8 +184,7 @@ async function createHookHarness(initialEnhancement = true) {
     URLSearchParams,
     window: { location: { search: "" } },
     performance: { now: () => now },
-    getComputedStyle: () => ({ transform: "matrix(-1.3,0,0,1.3,-24,18)", objectPosition: "40% 50%" }),
-    DOMMatrixReadOnly: class { d = 1.3; e = -24; f = 18; },
+    Date: { now: () => now },
     setInterval(callback) { interval = callback; return 1; },
     clearInterval() { interval = undefined; },
   });
@@ -220,6 +219,48 @@ async function createHookHarness(initialEnhancement = true) {
 }
 
 const fullDetection = [{ topLeft: fullBounds.slice(0, 2), bottomRight: fullBounds.slice(2), landmarks: fullLandmarks, probability: [0.99] }];
+
+test("hook readjusts a full source face outside the previous crop without guidance", async () => {
+  const hook = await createHookHarness();
+  await hook.tick(fullDetection, 0);
+  const previousTransform = hook.result.correctiveTransform;
+  const shiftedDetection = [{
+    topLeft: [800, 210], bottomRight: [970, 430],
+    landmarks: fullLandmarks.map(([horizontal, vertical]) => [horizontal + 500, vertical]), probability: [0.99],
+  }];
+  for (const time of [250, 500, 750, 1000, 1250, 1500, 1750]) {
+    await hook.tick(shiftedDetection, time);
+    assert.equal(hook.result.showPartialFaceCue, false);
+    assert.equal(hook.result.isFramingPaused, false);
+  }
+  const candidate = calculateFramingCandidate(800, 210, 970, 430, 1280, 720, 358, 385);
+  assert.equal(candidate.reason, undefined);
+  assert.notEqual(hook.result.correctiveTransform, previousTransform);
+  assert.equal(hook.result.correctiveTransform, context.candidateToTransform(candidate));
+  assert.equal(hook.result.correctiveObjectPosition, context.candidateToObjectPosition(candidate));
+  assert.equal(hook.result.isCorrecting, true);
+});
+
+test("hook restores unadjusted view before guidance for partial or missing source faces", async () => {
+  const partialDetection = [{ topLeft: leftBounds.slice(0, 2), bottomRight: leftBounds.slice(2), landmarks: leftLandmarks, probability: [0.99] }];
+  for (const absentDetection of [partialDetection, []]) {
+    const hook = await createHookHarness();
+    await hook.tick(fullDetection, 0);
+    assert.equal(hook.result.isCorrecting, true);
+    await hook.tick(absentDetection, 250);
+    assert.equal(hook.result.correctiveTransform, undefined);
+    assert.equal(hook.result.correctiveObjectPosition, "50% 50%");
+    assert.equal(hook.result.isCorrecting, false);
+    assert.equal(hook.result.isFramingPaused, true);
+    assert.equal(hook.result.showPartialFaceCue, false);
+    for (const time of [500, 750, 1000, 1250]) await hook.tick(absentDetection, time);
+    assert.equal(hook.result.showPartialFaceCue, true);
+    assert.equal(hook.result.correctiveTransform, undefined);
+    for (const time of [1500, 1750, 2000, 2250]) await hook.tick(fullDetection, time);
+    assert.equal(hook.result.showPartialFaceCue, false);
+    assert.equal(hook.result.isCorrecting, true);
+  }
+});
 
 test("hook preserves cue when a framed user leaves and toggles enhancement", async () => {
   const hook = await createHookHarness();
