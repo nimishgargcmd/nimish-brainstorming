@@ -13,7 +13,7 @@ import * as blazeface from "@tensorflow-models/blazeface";
 const TARGET_CENTER_X = 0.5; // horizontal center
 const TARGET_CENTER_Y = 0.52;
 const TARGET_FACE_HEIGHT = 0.42;
-const HEAD_PADDING_TOP = 0.55;
+const HEAD_PADDING_TOP = 0.30;
 const HEAD_PADDING_BOTTOM = 0.15;
 const HEAD_PADDING_SIDE = 0.15;
 const TILE_MARGIN_SIDE = 0.08;
